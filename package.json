@@ -4,11 +4,11 @@
     "t": "vitest --watch --ui"
   },
   "dependencies": {
-    "drizzle-orm": "^0.31.2",
-    "duckdb-async": "^1.0.0"
+    "drizzle-orm": "0.40.0",
+    "duckdb-async": "^1.2.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.6",
+    "@types/bun": "^1.2.5",
     "@types/uuid": "^10.0.0",
     "@vitest/ui": "^1.6.0",
     "uuid": "^10.0.0",

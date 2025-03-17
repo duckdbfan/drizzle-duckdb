@@ -7,7 +7,7 @@ import type { SelectedFieldsOrdered } from 'drizzle-orm/pg-core/query-builders/s
 import type {
   PgTransactionConfig,
   PreparedQueryConfig,
-  QueryResultHKT,
+  PgQueryResultHKT,
 } from 'drizzle-orm/pg-core/session';
 import { PgPreparedQuery, PgSession } from 'drizzle-orm/pg-core/session';
 import type {
@@ -232,6 +232,6 @@ export type GenericRowData<T extends RowData = RowData> = T;
 
 export type GenericTableData<T = RowData> = T[];
 
-export interface DuckDBQueryResultHKT extends QueryResultHKT {
+export interface DuckDBQueryResultHKT extends PgQueryResultHKT {
   type: GenericTableData<Assume<this['row'], RowData>>;
 }

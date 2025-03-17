@@ -923,7 +923,7 @@ test('build query', async () => {
 		.toSQL();
 
 	assert.deepEqual(query, {
-		sql: 'select "id" as "id", "name" as "name" from "buplic"."users" group by "users"."id", "users"."name"',
+		sql: 'select "id" as "id", "name" as "name" from "buplic"."users" group by "buplic"."users"."id", "buplic"."users"."name"',
 		params: [],
 	});
 });

@@ -5,7 +5,7 @@ import type { PgSession } from 'drizzle-orm/pg-core/session';
 
 export async function migrate<TSchema extends Record<string, unknown>>(
   db: DuckDBDatabase<TSchema>,
-  config: string | MigrationConfig
+  config: MigrationConfig
 ) {
   const migrations = readMigrationFiles(config);
 

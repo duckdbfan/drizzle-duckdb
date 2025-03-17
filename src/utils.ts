@@ -111,7 +111,7 @@ export function aliasFields(
   fullJoin = false
 ): SelectedFields {
   return Object.fromEntries(
-    Object.entries(fields).map(([key, value]) => {
+    Object.entries(fields).filter(([key]) => key !== 'enableRLS').map(([key, value]) => {
       if (fullJoin && is(value, Column)) {
         return [
           key,
@@ -144,7 +144,7 @@ export function aliasFields(
         return [
           key,
           Object.fromEntries(
-            Object.entries(value).map(([childKey, childValue]) => [
+            Object.entries(value).filter(([childKey]) => childKey !== 'enableRLS').map(([childKey, childValue]) => [
               childKey,
               (is(childValue, SQL) ? childValue : sql`${childValue}`).as(
                 `${parentKey}.${childKey}`
