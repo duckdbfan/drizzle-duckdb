@@ -3,7 +3,7 @@
   "module": "index.ts",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client.",
   "type": "module",
   "scripts": {
