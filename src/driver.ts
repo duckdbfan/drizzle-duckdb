@@ -10,7 +10,11 @@ import {
   type RelationalSchemaConfig,
   type TablesRelationalConfig,
 } from 'drizzle-orm/relations';
-import { getTableColumns, type DrizzleConfig, type DrizzleTypeError } from 'drizzle-orm/utils';
+import {
+  getTableColumns,
+  type DrizzleConfig,
+  type DrizzleTypeError,
+} from 'drizzle-orm/utils';
 import type {
   DuckDBClient,
   DuckDBQueryResultHKT,
@@ -223,10 +227,9 @@ export class DuckDBSelectBuilder<
   }
 
   from<TFrom extends PgTable | Subquery | PgViewBaseInternal | SQL>(
-    source: TableLikeHasEmptySelection<TFrom> extends true ? DrizzleTypeError<
-    "Cannot reference a data-modifying statement subquery if it doesn't contain a `returning` clause"
-  >
-  : TFrom
+    source: TableLikeHasEmptySelection<TFrom> extends true
+      ? DrizzleTypeError<"Cannot reference a data-modifying statement subquery if it doesn't contain a `returning` clause">
+      : TFrom
   ): CreatePgSelectFromBuilderMode<
     TBuilderMode,
     GetSelectTableName<TFrom>,

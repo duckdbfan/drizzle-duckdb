@@ -111,51 +111,55 @@ export function aliasFields(
   fullJoin = false
 ): SelectedFields {
   return Object.fromEntries(
-    Object.entries(fields).filter(([key]) => key !== 'enableRLS').map(([key, value]) => {
-      if (fullJoin && is(value, Column)) {
-        return [
-          key,
-          sql`${value}`.as(`${getTableName(value.table)}.${value.name}`),
-        ];
-      }
+    Object.entries(fields)
+      .filter(([key]) => key !== 'enableRLS')
+      .map(([key, value]) => {
+        if (fullJoin && is(value, Column)) {
+          return [
+            key,
+            sql`${value}`.as(`${getTableName(value.table)}.${value.name}`),
+          ];
+        }
 
-      if (fullJoin && is(value, SQL)) {
-        const col = value
-          .getSQL()
-          .queryChunks.find((chunk) => is(chunk, Column));
+        if (fullJoin && is(value, SQL)) {
+          const col = value
+            .getSQL()
+            .queryChunks.find((chunk) => is(chunk, Column));
 
-        const tableName = col?.table && getTableName(col?.table);
+          const tableName = col?.table && getTableName(col?.table);
 
-        return [key, value.as(tableName ? `${tableName}.${key}` : key)];
-      }
+          return [key, value.as(tableName ? `${tableName}.${key}` : key)];
+        }
 
-      if (is(value, SQL) || is(value, Column)) {
-        return [key, (is(value, SQL) ? value : sql`${value}`).as(key)];
-      }
+        if (is(value, SQL) || is(value, Column)) {
+          return [key, (is(value, SQL) ? value : sql`${value}`).as(key)];
+        }
 
-      if (is(value, SQL.Aliased)) {
+        if (is(value, SQL.Aliased)) {
+          return [key, value];
+        }
+
+        // todo: should probably make this recursive?
+        if (typeof value === 'object') {
+          const parentKey = key;
+
+          return [
+            key,
+            Object.fromEntries(
+              Object.entries(value)
+                .filter(([childKey]) => childKey !== 'enableRLS')
+                .map(([childKey, childValue]) => [
+                  childKey,
+                  (is(childValue, SQL) ? childValue : sql`${childValue}`).as(
+                    `${parentKey}.${childKey}`
+                  ),
+                ])
+            ),
+          ];
+        }
+
         return [key, value];
-      }
-
-      // todo: should probably make this recursive?
-      if (typeof value === 'object') {
-        const parentKey = key;
-
-        return [
-          key,
-          Object.fromEntries(
-            Object.entries(value).filter(([childKey]) => childKey !== 'enableRLS').map(([childKey, childValue]) => [
-              childKey,
-              (is(childValue, SQL) ? childValue : sql`${childValue}`).as(
-                `${parentKey}.${childKey}`
-              ),
-            ])
-          ),
-        ];
-      }
-
-      return [key, value];
-    })
+      })
   );
 }
 
