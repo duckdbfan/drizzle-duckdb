@@ -26,17 +26,11 @@ export class DuckDBDialect extends PgDialect {
   override async migrate(
     migrations: MigrationMeta[],
     session: PgSession,
-    config: string | MigrationConfig
+    config: MigrationConfig
   ): Promise<void> {
-    const migrationsSchema =
-      typeof config === 'string'
-        ? 'drizzle'
-        : config.migrationsSchema ?? 'drizzle';
+    const migrationsSchema = config.migrationsSchema ?? 'drizzle';
 
-    const migrationsTable =
-      typeof config === 'string'
-        ? '__drizzle_migrations'
-        : config.migrationsTable ?? '__drizzle_migrations';
+    const migrationsTable = config.migrationsTable ?? '__drizzle_migrations';
 
     const migrationTableCreate = sql`
 			CREATE TABLE IF NOT EXISTS ${sql.identifier(migrationsSchema)}.${sql.identifier(

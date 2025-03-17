@@ -1,0 +1,29 @@
+# Ignore node_modules
+node_modules/
+
+# Ignore test files
+test/
+*.test.js
+*.spec.js
+
+# Ignore Vitest UI files
+.vitest/
+
+# Ignore build artifacts
+dist/
+
+# Ignore environment files
+.env
+.env.local
+
+# Ignore logs
+*.log
+
+# Ignore editor and OS-specific files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+do.ts
+do2.ts
