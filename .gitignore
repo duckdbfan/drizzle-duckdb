@@ -1,2 +1,5 @@
 node_modules
 .vscode
+dist
+do.ts
+do2.ts

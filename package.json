@@ -1,5 +1,14 @@
 {
+  "name": "@duckdbfan/drizzle-duckdb",
+  "module": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "version": "0.0.2",
+  "description": "A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client.",
+  "type": "module",
   "scripts": {
+    "build": "bun build --target=node ./src/index.ts --outfile=dist/index.js && bun run build:declarations",
+    "build:declarations": "tsc --emitDeclarationOnly --project tsconfig.types.json",
     "test": "vitest",
     "t": "vitest --watch --ui"
   },
@@ -11,7 +20,28 @@
     "@types/bun": "^1.2.5",
     "@types/uuid": "^10.0.0",
     "@vitest/ui": "^1.6.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
     "uuid": "^10.0.0",
     "vitest": "^1.6.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/duckdbfan/drizzle-duckdb.git"
+  },
+  "keywords": [
+    "drizzle",
+    "duckdb"
+  ],
+  "author": "M L",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/duckdbfan/drizzle-duckdb/issues"
+  },
+  "homepage": "https://github.com/duckdbfan/drizzle-duckdb#readme",
+  "files": [
+    "src/*.ts",
+    "dist/*.js",
+    "dist/*.d.ts"
+  ]
 }
