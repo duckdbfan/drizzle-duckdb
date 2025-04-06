@@ -9,7 +9,7 @@ import {
   getTableName,
   sql,
 } from 'drizzle-orm';
-import { PgColumn, type SelectedFields } from 'drizzle-orm/pg-core';
+import { PgCustomColumn, type SelectedFields } from 'drizzle-orm/pg-core';
 
 // Need to get around "decoder" property being marked as internal
 type SQLInternal<T = unknown> = SQL<T> & {
@@ -32,7 +32,13 @@ export function mapResultRow<TResult>(
       } else if (is(field, SQL)) {
         decoder = (field as SQLInternal).decoder;
       } else {
-        decoder = (field.sql as SQLInternal).decoder;
+        const col = field.sql.queryChunks.find((chunk) => is(chunk, Column));
+
+        if (is(col, PgCustomColumn)) {
+          decoder = col;
+        } else {
+          decoder = (field.sql as SQLInternal).decoder;
+        }
       }
       let node = result;
       for (const [pathChunkIndex, pathChunk] of path.entries()) {
