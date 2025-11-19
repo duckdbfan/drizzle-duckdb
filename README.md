@@ -11,17 +11,18 @@ A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client. As
 ## Getting Started
 1. Install dependencies:
     ```sh
-    bun add @duckdbfan/drizzle-duckdb
+    bun add @duckdbfan/drizzle-duckdb @duckdb/node-api@1.4.2-r.1
     ```
 2. Figure it out! (sorry, might flesh this out later- see tests for some examples)
     ```typescript
-    import { Database } from 'duckdb-async';
+    import { DuckDBInstance } from '@duckdb/node-api';
     import { drizzle } from '@duckdbfan/drizzle-duckdb';
     import { DefaultLogger, sql } from 'drizzle-orm';
     import { char, integer, pgSchema, text } from 'drizzle-orm/pg-core';
     
-    const client = await Database.create(':memory:');
-    const db = drizzle(client, { logger: new DefaultLogger() });
+    const instance = await DuckDBInstance.create(':memory:');
+    const connection = await instance.connect();
+    const db = drizzle(connection, { logger: new DefaultLogger() });
 
     const customSchema = pgSchema('custom');
 
@@ -56,8 +57,12 @@ A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client. As
       .returning({ id: citiesTable.id });
 
     console.log(insertedIds);
-
+    
+    connection.closeSync();
     ```
+
+## Using the DuckDB Node API
+The recommended runtime client is [`@duckdb/node-api@1.4.2-r.1`](https://www.npmjs.com/package/@duckdb/node-api), which this package now pins in `peerDependencies` to avoid unexpected binary changes. The driver still supports the legacy `duckdb-async` wrapper if you install it separately, but the tests and docs use the Node API connection by default.
 
 ## Contributing
 Contributions are welcome, although I may not be very responsive.

@@ -1,4 +1,5 @@
-import { Database } from 'duckdb-async';
+import { DuckDBInstance } from '@duckdb/node-api';
+import type { DuckDBConnection } from '@duckdb/node-api';
 import {
   drizzle,
   DuckDBDatabase,
@@ -16,7 +17,7 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { DefaultLogger, eq, sql } from 'drizzle-orm';
-import { assert, beforeAll, beforeEach, test } from 'vitest';
+import { assert, afterAll, beforeAll, test } from 'vitest';
 
 const ENABLE_LOGGING = true;
 
@@ -55,21 +56,21 @@ const structTable = pgTable('struct_table', {
 
 interface Context {
   db: DuckDBDatabase;
-  client: Database;
   structTable: typeof structTable;
+  connection: DuckDBConnection;
 }
 
 let ctx: Context;
 
 beforeAll(async () => {
-  const client = await Database.create(':memory:');
-
-  const db = drizzle(client, { logger: ENABLE_LOGGING });
+  const instance = await DuckDBInstance.create(':memory:');
+  const connection = await instance.connect();
+  const db = drizzle(connection, { logger: ENABLE_LOGGING });
 
   ctx = {
-    client,
     db,
     structTable,
+    connection,
   };
 
   await db.execute(sql`
@@ -89,6 +90,10 @@ beforeAll(async () => {
       favorite_numbers: [0, 1, 42],
     },
   });
+});
+
+afterAll(() => {
+  ctx.connection?.closeSync();
 });
 
 test('migration', async () => {

@@ -1,4 +1,5 @@
-import { Database as DuckDB } from 'duckdb-async';
+import { DuckDBInstance } from '@duckdb/node-api';
+import type { DuckDBConnection } from '@duckdb/node-api';
 import {
   and,
   arrayContained,
@@ -65,7 +66,7 @@ import { drizzle, type DuckDBDatabase } from '../src';
 import { migrate } from '../src/migrator';
 import { v4 as uuid } from 'uuid';
 import { type Equal, Expect, randomString } from './utils';
-import { assert, beforeAll, beforeEach, expect, test } from 'vitest';
+import { assert, afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 
 const ENABLE_LOGGING = false;
 
@@ -183,15 +184,15 @@ const aggregateTable = publicSchema.table('aggregate_table', {
 
 interface Context {
   db: DuckDBDatabase;
-  client: DuckDB;
+  connection: DuckDBConnection;
 }
 
 let ctx: Context;
 
 beforeAll(async () => {
-  const client = await DuckDB.create(':memory:');
-
-  const db = drizzle(client, { logger: ENABLE_LOGGING });
+  const instance = await DuckDBInstance.create(':memory:');
+  const connection = await instance.connect();
+  const db = drizzle(connection, { logger: ENABLE_LOGGING });
 
   await db.execute(sql`CREATE SEQUENCE serial;`);
   await db.execute(sql`CREATE SEQUENCE serial_users;`);
@@ -205,9 +206,13 @@ beforeAll(async () => {
   await db.execute(sql`CREATE SEQUENCE serial_orders;`);
 
   ctx = {
-    client,
+    connection,
     db,
   };
+});
+
+afterAll(() => {
+  ctx.connection?.closeSync();
 });
 
 beforeEach(async () => {

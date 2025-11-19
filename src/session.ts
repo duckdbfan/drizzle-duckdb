@@ -1,4 +1,8 @@
 import type { Connection, Database, RowData } from 'duckdb-async';
+import type {
+  DuckDBConnection as NodeApiDuckDBConnection,
+  DuckDBValue as NodeApiDuckDBValue,
+} from '@duckdb/node-api';
 import { entityKind } from 'drizzle-orm/entity';
 import { type Logger, NoopLogger } from 'drizzle-orm/logger';
 import type { PgDialect } from 'drizzle-orm/pg-core/dialect';
@@ -22,6 +26,11 @@ import { TransactionRollbackError } from 'drizzle-orm/errors';
 
 export type DuckDBClient = Database;
 
+export type DuckDBClientLike =
+  | DuckDBClient
+  | Connection
+  | NodeApiDuckDBConnection;
+
 export class DuckDBPreparedQuery<
   T extends PreparedQueryConfig
 > extends PgPreparedQuery<T> {
@@ -31,7 +40,7 @@ export class DuckDBPreparedQuery<
   // private queryConfig: QueryOptions;
 
   constructor(
-    private client: DuckDBClient | Connection,
+    private client: DuckDBClientLike,
     private queryString: string,
     private params: unknown[],
     private logger: Logger,
@@ -51,13 +60,12 @@ export class DuckDBPreparedQuery<
 
     const {
       fields,
-      client,
       joinsNotNullableMap,
       customResultMapper,
       queryString,
     } = this as typeof this & { joinsNotNullableMap?: Record<string, boolean> };
 
-    const rows = (await client.all(queryString, ...params)) ?? [];
+    const rows = await executeOnClient(this.client, queryString, params);
 
     if (rows.length === 0 || !fields) {
       return rows;
@@ -96,7 +104,7 @@ export class DuckDBSession<
   private logger: Logger;
 
   constructor(
-    private client: DuckDBClient | Connection,
+    private client: DuckDBClientLike,
     dialect: DuckDBDialect,
     private schema: RelationalSchemaConfig<TSchema> | undefined,
     private options: DuckDBSessionOptions = {}
@@ -126,8 +134,11 @@ export class DuckDBSession<
   override async transaction<T>(
     transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
   ): Promise<T> {
-    const connection =
-      'connect' in this.client ? await this.client.connect() : this.client;
+    const client = this.client;
+    const clientHasConnect = hasConnect(client);
+    const connection = clientHasConnect
+      ? await client.connect()
+      : client;
 
     const session = new DuckDBSession(
       connection,
@@ -152,7 +163,9 @@ export class DuckDBSession<
       await tx.execute(sql`rollback`);
       throw error;
     } finally {
-      await connection.close();
+      if (clientHasConnect) {
+        await closeClientConnection(connection);
+      }
     }
   }
 }
@@ -226,6 +239,68 @@ export class DuckDBTransaction<
       throw err;
     }
   }
+}
+
+function isDuckDbAsyncClient(
+  client: DuckDBClientLike
+): client is DuckDBClient | Connection {
+  return typeof (client as Connection).all === 'function';
+}
+
+function isNodeApiClient(
+  client: DuckDBClientLike
+): client is NodeApiDuckDBConnection {
+  return typeof (client as NodeApiDuckDBConnection).run === 'function';
+}
+
+function hasConnect(client: DuckDBClientLike): client is DuckDBClient {
+  return typeof (client as DuckDBClient).connect === 'function';
+}
+
+async function closeClientConnection(
+  connection: Connection | NodeApiDuckDBConnection
+): Promise<void> {
+  if ('close' in connection && typeof connection.close === 'function') {
+    await connection.close();
+    return;
+  }
+
+  if (
+    'closeSync' in connection &&
+    typeof connection.closeSync === 'function'
+  ) {
+    connection.closeSync();
+    return;
+  }
+
+  if (
+    'disconnectSync' in connection &&
+    typeof connection.disconnectSync === 'function'
+  ) {
+    connection.disconnectSync();
+  }
+}
+
+async function executeOnClient(
+  client: DuckDBClientLike,
+  query: string,
+  params: unknown[]
+): Promise<RowData[]> {
+  if (isDuckDbAsyncClient(client)) {
+    return (await client.all(query, ...params)) ?? [];
+  }
+
+  if (isNodeApiClient(client)) {
+    const values =
+      params.length > 0 ? (params as NodeApiDuckDBValue[]) : undefined;
+    const result = await client.run(query, values);
+    const rows = await result.getRowObjectsJS();
+    return (rows ?? []) as RowData[];
+  }
+
+  throw new Error(
+    'Unsupported DuckDB client: expected duckdb-async Database/Connection or @duckdb/node-api Connection.'
+  );
 }
 
 export type GenericRowData<T extends RowData = RowData> = T;
