@@ -1,5 +1,5 @@
 {
-  "name": "@duckdbfan/drizzle-duckdb",
+  "name": "@duckdbfan/drizzle-neo-duckdb",
   "module": "index.ts",
   "main": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -39,7 +39,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/duckdbfan/drizzle-duckdb.git"
+    "url": "git+https://github.com/duckdbfan/drizzle-neo-duckdb.git"
   },
   "keywords": [
     "drizzle",
@@ -48,9 +48,9 @@
   "author": "M L",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/duckdbfan/drizzle-duckdb/issues"
+    "url": "https://github.com/duckdbfan/drizzle-neo-duckdb/issues"
   },
-  "homepage": "https://github.com/duckdbfan/drizzle-duckdb#readme",
+  "homepage": "https://github.com/duckdbfan/drizzle-neo-duckdb#readme",
   "files": [
     "src/*.ts",
     "dist/*.mjs",

@@ -1,4 +1,4 @@
-# drizzle-duckdb
+# drizzle-neo-duckdb
 
 ## Description
 A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client. As of writing this, certain things will work, and others won't. Notably, DuckDB-specific column types such as `struct`, `list`, `array` are not implemented, but this could be done using [drizzle custom types](https://orm.drizzle.team/docs/custom-types). (This is planned to be implemented in the package later on)
@@ -11,12 +11,12 @@ A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client. As
 ## Getting Started
 1. Install dependencies:
     ```sh
-    bun add @duckdbfan/drizzle-duckdb @duckdb/node-api@1.4.2-r.1
+    bun add @duckdbfan/drizzle-neo-duckdb @duckdb/node-api@1.4.2-r.1
     ```
 2. Figure it out! (sorry, might flesh this out later- see tests for some examples)
     ```typescript
     import { DuckDBInstance } from '@duckdb/node-api';
-    import { drizzle } from '@duckdbfan/drizzle-duckdb';
+    import { drizzle } from '@duckdbfan/drizzle-neo-duckdb';
     import { DefaultLogger, sql } from 'drizzle-orm';
     import { char, integer, pgSchema, text } from 'drizzle-orm/pg-core';
     
