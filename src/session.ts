@@ -1,6 +1,7 @@
-import type { Connection, Database, RowData } from 'duckdb-async';
+import type { RowData } from 'duckdb-async';
 import { entityKind } from 'drizzle-orm/entity';
-import { type Logger, NoopLogger } from 'drizzle-orm/logger';
+import type { Logger } from 'drizzle-orm/logger';
+import { NoopLogger } from 'drizzle-orm/logger';
 import type { PgDialect } from 'drizzle-orm/pg-core/dialect';
 import { PgTransaction } from 'drizzle-orm/pg-core';
 import type { SelectedFieldsOrdered } from 'drizzle-orm/pg-core/query-builders/select.types';
@@ -16,22 +17,27 @@ import type {
 } from 'drizzle-orm/relations';
 import { fillPlaceholders, type Query, SQL, sql } from 'drizzle-orm/sql/sql';
 import type { Assume } from 'drizzle-orm/utils';
-import { mapResultRow } from './utils';
-import type { DuckDBDialect } from './dialect';
+import { adaptArrayOperators } from './sql/query-rewriters.ts';
+import { mapResultRow } from './sql/result-mapper.ts';
+import type { DuckDBDialect } from './dialect.ts';
 import { TransactionRollbackError } from 'drizzle-orm/errors';
+import type { DuckDBClient, DuckDBClientLike } from './client.ts';
+import {
+  closeClientConnection,
+  executeOnClient,
+  hasConnect,
+  prepareParams,
+} from './client.ts';
 
-export type DuckDBClient = Database;
+export type { DuckDBClient, DuckDBClientLike } from './client.ts';
 
 export class DuckDBPreparedQuery<
   T extends PreparedQueryConfig
 > extends PgPreparedQuery<T> {
   static readonly [entityKind]: string = 'DuckDBPreparedQuery';
 
-  // private rawQueryConfig: QueryOptions;
-  // private queryConfig: QueryOptions;
-
   constructor(
-    private client: DuckDBClient | Connection,
+    private client: DuckDBClientLike,
     private queryString: string,
     private params: unknown[],
     private logger: Logger,
@@ -45,22 +51,27 @@ export class DuckDBPreparedQuery<
   async execute(
     placeholderValues: Record<string, unknown> | undefined = {}
   ): Promise<T['execute']> {
-    const params = fillPlaceholders(this.params, placeholderValues);
+    const params = prepareParams(
+      fillPlaceholders(this.params, placeholderValues)
+    );
+    const rewrittenQuery = adaptArrayOperators(this.queryString);
 
-    this.logger.logQuery(this.queryString, params);
+    this.logger.logQuery(rewrittenQuery, params);
 
     const {
       fields,
-      client,
       joinsNotNullableMap,
       customResultMapper,
-      queryString,
     } = this as typeof this & { joinsNotNullableMap?: Record<string, boolean> };
 
-    const rows = (await client.all(queryString, ...params)) ?? [];
+    const rows = await executeOnClient(
+      this.client,
+      rewrittenQuery,
+      params
+    );
 
     if (rows.length === 0 || !fields) {
-      return rows;
+      return rows as T['execute'];
     }
 
     const rowValues = rows.map((row) => Object.values(row));
@@ -68,7 +79,7 @@ export class DuckDBPreparedQuery<
     return customResultMapper
       ? customResultMapper(rowValues)
       : rowValues.map((row) =>
-          mapResultRow<T['execute']>(fields!, row, joinsNotNullableMap)
+          mapResultRow<T['execute']>(fields, row, joinsNotNullableMap)
         );
   }
 
@@ -96,7 +107,7 @@ export class DuckDBSession<
   private logger: Logger;
 
   constructor(
-    private client: DuckDBClient | Connection,
+    private client: DuckDBClientLike,
     dialect: DuckDBDialect,
     private schema: RelationalSchemaConfig<TSchema> | undefined,
     private options: DuckDBSessionOptions = {}
@@ -126,8 +137,11 @@ export class DuckDBSession<
   override async transaction<T>(
     transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
   ): Promise<T> {
-    const connection =
-      'connect' in this.client ? await this.client.connect() : this.client;
+    const client = this.client;
+    const clientHasConnect = hasConnect(client);
+    const connection = clientHasConnect
+      ? await client.connect()
+      : client;
 
     const session = new DuckDBSession(
       connection,
@@ -152,7 +166,9 @@ export class DuckDBSession<
       await tx.execute(sql`rollback`);
       throw error;
     } finally {
-      await connection.close();
+      if (clientHasConnect) {
+        await closeClientConnection(connection);
+      }
     }
   }
 }
@@ -196,7 +212,6 @@ export class DuckDBTransaction<
   }
 
   setTransaction(config: PgTransactionConfig): Promise<void> {
-    // Need to work around omitted internal types from drizzle...
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
     return (this as unknown as Tx).session.execute(
       sql`set transaction ${this.getTransactionConfigSQL(config)}`
@@ -206,7 +221,6 @@ export class DuckDBTransaction<
   override async transaction<T>(
     transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
   ): Promise<T> {
-    // Need to work around omitted internal types from drizzle...
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
 
     const savepointName = `sp${this.nestedIndex + 1}`;

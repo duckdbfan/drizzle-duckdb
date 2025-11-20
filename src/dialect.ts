@@ -13,7 +13,7 @@ import {
   PgTimestampString,
   PgUUID,
 } from 'drizzle-orm/pg-core';
-import { DuckDBSession } from './session';
+import { DuckDBSession } from './session.ts';
 import {
   sql,
   type DriverValueEncoder,
@@ -26,28 +26,47 @@ export class DuckDBDialect extends PgDialect {
   override async migrate(
     migrations: MigrationMeta[],
     session: PgSession,
-    config: MigrationConfig
+    config: MigrationConfig | string
   ): Promise<void> {
-    const migrationsSchema = config.migrationsSchema ?? 'drizzle';
+    const migrationConfig: MigrationConfig =
+      typeof config === 'string' ? { migrationsFolder: config } : config;
 
-    const migrationsTable = config.migrationsTable ?? '__drizzle_migrations';
+    const migrationsSchema = migrationConfig.migrationsSchema ?? 'drizzle';
+    const migrationsTable =
+      migrationConfig.migrationsTable ?? '__drizzle_migrations';
+    const migrationsSequence = `${migrationsTable}_id_seq`;
+    const legacySequence = 'migrations_pk_seq';
+
+    const escapeIdentifier = (value: string) => value.replace(/"/g, '""');
+    const sequenceLiteral = `"${escapeIdentifier(
+      migrationsSchema
+    )}"."${escapeIdentifier(migrationsSequence)}"`;
 
     const migrationTableCreate = sql`
-			CREATE TABLE IF NOT EXISTS ${sql.identifier(migrationsSchema)}.${sql.identifier(
+      CREATE TABLE IF NOT EXISTS ${sql.identifier(migrationsSchema)}.${sql.identifier(
       migrationsTable
     )} (
-				id integer PRIMARY KEY default nextval('migrations_pk_seq'),
-				hash text NOT NULL,
-				created_at bigint
-			)
-		`;
+        id integer PRIMARY KEY default nextval('${sql.raw(sequenceLiteral)}'),
+        hash text NOT NULL,
+        created_at bigint
+      )
+    `;
 
-    await session.execute(
-      sql.raw('CREATE SEQUENCE IF NOT EXISTS migrations_pk_seq')
-    );
     await session.execute(
       sql`CREATE SCHEMA IF NOT EXISTS ${sql.identifier(migrationsSchema)}`
     );
+    await session.execute(
+      sql`CREATE SEQUENCE IF NOT EXISTS ${sql.identifier(
+        migrationsSchema
+      )}.${sql.identifier(migrationsSequence)}`
+    );
+    if (legacySequence !== migrationsSequence) {
+      await session.execute(
+        sql`CREATE SEQUENCE IF NOT EXISTS ${sql.identifier(
+          migrationsSchema
+        )}.${sql.identifier(legacySequence)}`
+      );
+    }
     await session.execute(migrationTableCreate);
 
     const dbMigrations = await session.all<{

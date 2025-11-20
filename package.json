@@ -1,9 +1,9 @@
 {
-  "name": "@duckdbfan/drizzle-duckdb",
-  "module": "index.ts",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.ts",
-  "version": "0.0.7",
+  "name": "@duckdbfan/drizzle-neo-duckdb",
+  "module": "./dist/index.mjs",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "version": "0.0.8",
   "description": "A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client.",
   "type": "module",
   "scripts": {
@@ -13,10 +13,20 @@
     "t": "vitest --watch --ui"
   },
   "peerDependencies": {
+    "@duckdb/node-api": "1.4.2-r.1",
     "drizzle-orm": "^0.40.0",
     "duckdb-async": "^1.0.0"
   },
+  "peerDependenciesMeta": {
+    "@duckdb/node-api": {
+      "optional": true
+    },
+    "duckdb-async": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@duckdb/node-api": "1.4.2-r.1",
     "@types/bun": "^1.2.5",
     "@types/uuid": "^10.0.0",
     "@vitest/ui": "^1.6.0",
@@ -29,8 +39,24 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/duckdbfan/drizzle-duckdb.git"
+    "url": "git+https://github.com/duckdbfan/drizzle-neo-duckdb.git"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "packageManager": "bun@1.2.2",
   "keywords": [
     "drizzle",
     "duckdb"
@@ -38,9 +64,9 @@
   "author": "M L",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/duckdbfan/drizzle-duckdb/issues"
+    "url": "https://github.com/duckdbfan/drizzle-neo-duckdb/issues"
   },
-  "homepage": "https://github.com/duckdbfan/drizzle-duckdb#readme",
+  "homepage": "https://github.com/duckdbfan/drizzle-neo-duckdb#readme",
   "files": [
     "src/*.ts",
     "dist/*.mjs",

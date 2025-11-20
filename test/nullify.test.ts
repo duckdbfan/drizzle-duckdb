@@ -1,11 +1,18 @@
-import { Database } from 'duckdb-async';
-import { drizzle, DuckDBDatabase } from '../src';
-import { alias, boolean, char, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  alias,
+  boolean,
+  char,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 import { DefaultLogger, eq, sql } from 'drizzle-orm';
-import { assert, beforeAll, beforeEach, test } from 'vitest';
-
-console.log('assert');
-console.log(assert);
+import { afterAll, beforeAll, beforeEach, test } from 'vitest';
+import * as nodeAssert from 'node:assert/strict';
+import { DuckDBInstance } from '@duckdb/node-api';
+import type { DuckDBConnection } from '@duckdb/node-api';
+import { drizzle, DuckDBDatabase } from '../src';
 
 const ENABLE_LOGGING = false;
 
@@ -27,19 +34,19 @@ const users2Table = pgTable('users2', {
 
 interface Context {
   db: DuckDBDatabase;
-  client: Database;
+  connection: DuckDBConnection;
 }
 
 let ctx: Context;
 
 beforeAll(async () => {
-  const client = await Database.create(':memory:');
-
-  const db = drizzle(client, { logger: ENABLE_LOGGING });
+  const instance = await DuckDBInstance.create(':memory:');
+  const connection = await instance.connect();
+  const db = drizzle(connection, { logger: ENABLE_LOGGING });
 
   ctx = {
-    client,
     db,
+    connection,
   };
 
   await db.execute(sql`CREATE SEQUENCE serial_users;`);
@@ -65,6 +72,10 @@ beforeAll(async () => {
     )
   `
   );
+});
+
+afterAll(() => {
+  ctx.connection?.closeSync();
 });
 
 test('return null instead of object if join has no match', async () => {
@@ -98,7 +109,7 @@ test('return null instead of object if join has no match', async () => {
     .from(users2Table)
     .leftJoin(citiesTable, eq(users2Table.cityId, citiesTable.id));
 
-  assert.deepEqual(res, [
+  nodeAssert.deepEqual(res, [
     {
       id: 1,
       user: {
