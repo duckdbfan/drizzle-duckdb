@@ -12,6 +12,6 @@ repos:
     hooks:
       - id: bun-test
         name: Bun test suite
-        entry: bun run test
+        entry: bun run test -- run
         language: system
         pass_filenames: false
