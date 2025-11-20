@@ -1,4 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
+import type { SQLWrapper } from 'drizzle-orm/sql/sql';
 import { customType } from 'drizzle-orm/pg-core';
 
 type IntColType =
@@ -46,70 +47,157 @@ type AnyColType =
 
 type ListColType = `${AnyColType}[]`;
 type ArrayColType = `${AnyColType}[${number}]`;
-/**
- * @example
- * const structColType: StructColType = 'STRUCT (name: STRING, age: INT)';
- */
 type StructColType = `STRUCT (${string})`;
+
+type Primitive = AnyColType | ListColType | ArrayColType | StructColType;
+
+function formatLiteral(value: unknown, typeHint?: string): string {
+  if (value === null || value === undefined) {
+    return 'NULL';
+  }
+
+  const upperType = typeHint?.toUpperCase() ?? '';
+  if (value instanceof Date) {
+    return `'${value.toISOString()}'`;
+  }
+
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'TRUE' : 'FALSE';
+  }
+
+  const str =
+    typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
+
+  const escaped = str.replace(/'/g, "''");
+  // Simple quoting based on hint.
+  if (
+    upperType.includes('CHAR') ||
+    upperType.includes('TEXT') ||
+    upperType.includes('STRING') ||
+    upperType.includes('VARCHAR')
+  ) {
+    return `'${escaped}'`;
+  }
+
+  return `'${escaped}'`;
+}
+
+function buildListLiteral(values: unknown[], elementType?: string): SQL {
+  if (values.length === 0) {
+    return sql`[]`;
+  }
+  const chunks = values.map((v) =>
+    typeof v === 'object' && !Array.isArray(v)
+      ? sql`${v as SQLWrapper}`
+      : sql.raw(formatLiteral(v, elementType))
+  );
+  return sql`list_value(${sql.join(chunks, sql.raw(', '))})`;
+}
+
+function buildStructLiteral(
+  value: Record<string, unknown>,
+  schema?: Record<string, Primitive>
+): SQL {
+  const parts = Object.entries(value).map(([key, val]) => {
+    const typeHint = schema?.[key];
+    if (Array.isArray(val)) {
+      const inner =
+        typeof typeHint === 'string' && typeHint.endsWith('[]')
+          ? typeHint.slice(0, -2)
+          : undefined;
+
+      return sql`${sql.identifier(key)} := ${buildListLiteral(val, inner)}`;
+    }
+    return sql`${sql.identifier(key)} := ${val}`;
+  });
+  return sql`struct_pack(${sql.join(parts, sql.raw(', '))})`;
+}
+
+function buildMapLiteral(value: Record<string, unknown>, valueType?: string): SQL {
+  const keys = Object.keys(value);
+  const vals = Object.values(value);
+  const keyList = buildListLiteral(keys, 'TEXT');
+  const valList = buildListLiteral(
+    vals,
+    valueType?.endsWith('[]') ? valueType.slice(0, -2) : valueType
+  );
+  return sql`map(${keyList}, ${valList})`;
+}
+
+export const duckDbList = <TData = unknown>(
+  name: string,
+  elementType: AnyColType
+) =>
+  customType<{ data: TData[]; driverData: SQL | unknown[] | string }>({
+    dataType() {
+      return `${elementType}[]`;
+    },
+    toDriver(value: TData[]) {
+      return buildListLiteral(value, elementType);
+    },
+    fromDriver(value: unknown[] | string | SQL): TData[] {
+      if (Array.isArray(value)) {
+        return value as TData[];
+      }
+      try {
+        return JSON.parse(value as string) as TData[];
+      } catch {
+        return [] as TData[];
+      }
+    },
+  })(name);
+
+export const duckDbArray = <TData = unknown>(
+  name: string,
+  elementType: AnyColType,
+  fixedLength?: number
+) =>
+  customType<{ data: TData[]; driverData: SQL | unknown[] | string }>({
+    dataType() {
+      return fixedLength
+        ? `${elementType}[${fixedLength}]`
+        : `${elementType}[]`;
+    },
+    toDriver(value: TData[]) {
+      return buildListLiteral(value, elementType);
+    },
+    fromDriver(value: unknown[] | string | SQL): TData[] {
+      if (Array.isArray(value)) {
+        return value as TData[];
+      }
+      try {
+        return JSON.parse(value as string) as TData[];
+      } catch {
+        return [] as TData[];
+      }
+    },
+  })(name);
 
 export const duckDbMap = <TData extends Record<string, any>>(
   name: string,
   valueType: AnyColType | ListColType | ArrayColType
 ) =>
-  customType<{ data: TData; driverData: string }>({
-    dataType() {
-      console.log('dataType');
+  customType<{ data: TData; driverData: TData }>({
+  dataType() {
       return `MAP (STRING, ${valueType})`;
     },
     toDriver(value: TData) {
-      console.log('toDriver');
-      // todo: more sophisticated encoding based on data type
-      const valueFormatter = (value: any) => {
-        if (['STRING', 'TEXT', 'VARCHAR'].includes(valueType)) {
-          return `'${value}'`;
-        }
-
-        return JSON.stringify(value);
-      };
-
-      const values = Object.entries(value).map(([key, value]) => {
-        return sql.raw(`'${key}': ${valueFormatter(value)}`);
-      });
-
-      const sqlChunks: SQL[] = [];
-
-      for (const value of values) {
-        sqlChunks.push(value);
-      }
-
-      return sql`MAP {${sql.join(sqlChunks, sql.raw(', '))}}`;
+      return buildMapLiteral(value, valueType);
     },
-    // ! this won't actually ever work because of how map values are returned
-    fromDriver(value: string): TData {
-      console.log('fromDriver');
-      // todo: more sophisticated decoding based on data type
-
-      const replacedValue = value.replaceAll(
-        /(?:^{)?([^=]+?)=(.+)(?:}$)?/g,
-        '"$1":"$2"'
-      );
-      const formattedValue = `{${replacedValue}}`;
-
-      const valueObj = JSON.parse(formattedValue);
-
-      return Object.fromEntries(
-        Object.entries(valueObj).map(([key, value]) => {
-          return [key, JSON.parse(value as string)];
-        })
-      ) as TData;
+    fromDriver(value: TData): TData {
+      return value;
     },
   })(name);
 
 export const duckDbStruct = <TData extends Record<string, any>>(
   name: string,
-  schema: Record<string, AnyColType | ListColType | ArrayColType>
+  schema: Record<string, Primitive>
 ) =>
-  customType<{ data: TData; driverData: string }>({
+  customType<{ data: TData; driverData: TData }>({
     dataType() {
       const fields = Object.entries(schema).map(
         ([key, type]) => `${key} ${type}`
@@ -118,24 +206,17 @@ export const duckDbStruct = <TData extends Record<string, any>>(
       return `STRUCT (${fields.join(', ')})`;
     },
     toDriver(value: TData) {
-      // todo: more sophisticated encoding based on data type
-      const valueFormatter = (value: any) =>
-        JSON.stringify(value).replaceAll(/(?<!\\)"/g, "'");
-
-      const values = Object.entries(value).map(([key, value]) => {
-        return sql.raw(`'${key}': ${valueFormatter(value)}`);
-      });
-
-      const sqlChunks: SQL[] = [];
-
-      for (const value of values) {
-        sqlChunks.push(value);
-      }
-
-      return sql`(SELECT {${sql.join(sqlChunks, sql.raw(', '))}})`;
+      return buildStructLiteral(value, schema);
     },
-    fromDriver(value: string): TData {
-      return value as unknown as TData;
+    fromDriver(value: TData | string): TData {
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value) as TData;
+        } catch {
+          return value as unknown as TData;
+        }
+      }
+      return value;
     },
   })(name);
 
@@ -152,4 +233,133 @@ export const duckDbBlob = customType<{
   },
 });
 
-// todo: date/time types
+export const duckDbInet = (name: string) =>
+  customType<{ data: string; driverData: string }>({
+    dataType() {
+      return 'INET';
+    },
+    toDriver(value: string) {
+      return value;
+    },
+  })(name);
+
+export const duckDbInterval = (name: string) =>
+  customType<{ data: string; driverData: string }>({
+    dataType() {
+      return 'INTERVAL';
+    },
+    toDriver(value: string) {
+      return value;
+    },
+  })(name);
+
+type TimestampMode = 'date' | 'string';
+
+interface TimestampOptions {
+  withTimezone?: boolean;
+  mode?: TimestampMode;
+  precision?: number;
+}
+
+export const duckDbTimestamp = (
+  name: string,
+  options: TimestampOptions = {}
+) =>
+  customType<{
+    data: Date | string;
+    driverData: SQL | string | Date;
+  }>({
+    dataType() {
+      if (options.withTimezone) {
+        return 'TIMESTAMPTZ';
+      }
+      const precision = options.precision ? `(${options.precision})` : '';
+      return `TIMESTAMP${precision}`;
+    },
+    toDriver(value: Date | string) {
+      const iso = value instanceof Date ? value.toISOString() : value;
+      const normalized = iso.replace('T', ' ').replace('Z', '+00');
+      const typeKeyword = options.withTimezone ? 'TIMESTAMPTZ' : 'TIMESTAMP';
+      return sql.raw(`${typeKeyword} '${normalized}'`);
+    },
+    fromDriver(value: Date | string | SQL) {
+      if (options.mode === 'string') {
+        if (value instanceof Date) {
+          return value.toISOString().replace('T', ' ').replace('Z', '+00');
+        }
+        return typeof value === 'string' ? value : value.toString();
+      }
+      if (value instanceof Date) {
+        return value;
+      }
+      const stringValue =
+        typeof value === 'string' ? value : value.toString();
+      const normalized = !stringValue.endsWith('Z')
+        ? `${stringValue.replace(' ', 'T')}Z`
+        : stringValue;
+      return new Date(normalized);
+    },
+  })(name);
+
+export const duckDbDate = (name: string) =>
+  customType<{ data: string | Date; driverData: string | Date }>({
+    dataType() {
+      return 'DATE';
+    },
+    toDriver(value: string | Date) {
+      return value;
+    },
+    fromDriver(value: string | Date) {
+        const str =
+          value instanceof Date
+            ? value.toISOString().slice(0, 10)
+            : value;
+        return str;
+    },
+  })(name);
+
+export const duckDbTime = (name: string) =>
+  customType<{ data: string; driverData: string | bigint }>({
+    dataType() {
+      return 'TIME';
+    },
+    toDriver(value: string) {
+      return value;
+    },
+    fromDriver(value: string | bigint) {
+      if (typeof value === 'bigint') {
+        const totalMillis = Number(value) / 1000;
+        const date = new Date(totalMillis);
+        return date.toISOString().split('T')[1]!.replace('Z', '');
+      }
+      return value;
+    },
+  })(name);
+
+function toListValue(values: (unknown | SQLWrapper)[]): SQL {
+  return buildListLiteral(values);
+}
+
+export function duckDbArrayContains(
+  column: SQLWrapper,
+  values: unknown[] | SQLWrapper
+): SQL {
+  const rhs = Array.isArray(values) ? toListValue(values) : values;
+  return sql`array_has_all(${column}, ${rhs})`;
+}
+
+export function duckDbArrayContained(
+  column: SQLWrapper,
+  values: unknown[] | SQLWrapper
+): SQL {
+  const rhs = Array.isArray(values) ? toListValue(values) : values;
+  return sql`array_has_all(${rhs}, ${column})`;
+}
+
+export function duckDbArrayOverlaps(
+  column: SQLWrapper,
+  values: unknown[] | SQLWrapper
+): SQL {
+  const rhs = Array.isArray(values) ? toListValue(values) : values;
+  return sql`array_has_any(${column}, ${rhs})`;
+}

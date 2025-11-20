@@ -1,71 +1,106 @@
 # drizzle-neo-duckdb
 
-## Description
-A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client. As of writing this, certain things will work, and others won't. Notably, DuckDB-specific column types such as `struct`, `list`, `array` are not implemented, but this could be done using [drizzle custom types](https://orm.drizzle.team/docs/custom-types). (This is planned to be implemented in the package later on)
+DuckDB dialect glue for [drizzle-orm](https://orm.drizzle.team/), built on the Postgres driver surface but targeting DuckDB. The focus is to get Drizzle’s query builder, migrations, and type inference working against DuckDB’s Node runtimes.
 
-## Disclaimers
-- **Experimental**: This project is in an experimental stage. Certain features may be broken or not function as expected.
-- **Use at Your Own Risk**: Users should proceed with caution and use this project at their own risk.
-- **Maintenance**: This project may not be actively maintained. Updates and bug fixes are not guaranteed.
+- **Runtime targets:** `@duckdb/node-api@1.4.2-r.1` (recommended) and `duckdb-async` (legacy, optional peer).
+- **Module format:** ESM only, `moduleResolution: bundler`, explicit `.ts` extensions in source.
+- **Status:** Experimental; feature coverage is still growing and several DuckDB-specific types/behaviors are missing (see below).
 
-## Getting Started
-1. Install dependencies:
-    ```sh
-    bun add @duckdbfan/drizzle-neo-duckdb @duckdb/node-api@1.4.2-r.1
-    ```
-2. Figure it out! (sorry, might flesh this out later- see tests for some examples)
-    ```typescript
-    import { DuckDBInstance } from '@duckdb/node-api';
-    import { drizzle } from '@duckdbfan/drizzle-neo-duckdb';
-    import { DefaultLogger, sql } from 'drizzle-orm';
-    import { char, integer, pgSchema, text } from 'drizzle-orm/pg-core';
-    
-    const instance = await DuckDBInstance.create(':memory:');
-    const connection = await instance.connect();
-    const db = drizzle(connection, { logger: new DefaultLogger() });
+## Installation
 
-    const customSchema = pgSchema('custom');
+```sh
+bun add @duckdbfan/drizzle-neo-duckdb @duckdb/node-api@1.4.2-r.1
+# optionally, if you prefer the duckdb-async wrapper
+# bun add duckdb-async
+```
 
-    await db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${customSchema}`);
+## Quick start (Node API)
 
-    const citiesTable = customSchema.table('cities', {
-      id: integer('id')
-        .primaryKey()
-        .default(sql`nextval('serial_cities')`),
-      name: text('name').notNull(),
-      state: char('state', { length: 2 }),
-    });
+```ts
+import { DuckDBInstance } from '@duckdb/node-api';
+import { drizzle } from '@duckdbfan/drizzle-neo-duckdb';
+import { DefaultLogger, sql } from 'drizzle-orm';
+import { char, integer, pgSchema, text } from 'drizzle-orm/pg-core';
 
-    await db.execute(sql`CREATE SEQUENCE IF NOT EXISTS serial_cities;`);
+const instance = await DuckDBInstance.create(':memory:');
+const connection = await instance.connect();
+const db = drizzle(connection, { logger: new DefaultLogger() });
 
-    await db.execute(
-      sql`
-        create table if not exists ${citiesTable} (
-          id integer primary key default nextval('serial_cities'),
-          name text not null,
-          state char(2)
-        )
-      `
-    );
+const customSchema = pgSchema('custom');
 
-    const insertedIds = await db
-      .insert(citiesTable)
-      .values([
-        { name: 'Paris', state: 'FR' },
-        { name: 'London', state: 'UK' },
-      ])
-      .returning({ id: citiesTable.id });
+await db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${customSchema}`);
+await db.execute(sql`CREATE SEQUENCE IF NOT EXISTS serial_cities;`);
 
-    console.log(insertedIds);
-    
-    connection.closeSync();
-    ```
+const cities = customSchema.table('cities', {
+  id: integer('id').primaryKey().default(sql`nextval('serial_cities')`),
+  name: text('name').notNull(),
+  state: char('state', { length: 2 }),
+});
 
-## Using the DuckDB Node API
-The recommended runtime client is [`@duckdb/node-api@1.4.2-r.1`](https://www.npmjs.com/package/@duckdb/node-api), which this package now pins in `peerDependencies` to avoid unexpected binary changes. The driver still supports the legacy `duckdb-async` wrapper if you install it separately, but the tests and docs use the Node API connection by default.
+await db.execute(sql`
+  create table if not exists ${cities} (
+    id integer primary key default nextval('serial_cities'),
+    name text not null,
+    state char(2)
+  )
+`);
+
+const inserted = await db
+  .insert(cities)
+  .values([
+    { name: 'Paris', state: 'FR' },
+    { name: 'London', state: 'UK' },
+  ])
+  .returning({ id: cities.id });
+
+console.log(inserted);
+connection.closeSync();
+```
+
+## Migrations
+
+Use `migrate(db, './path/to/migrations')` (or pass the full `MigrationConfig`) to apply SQL files. Migration metadata lives in the `drizzle.__drizzle_migrations` table by default with a schema-local sequence named `__drizzle_migrations_id_seq`; custom `migrationsSchema`/`migrationsTable` values get their own scoped sequence as well.
+
+## Custom column helpers (experimental)
+
+The package ships a few DuckDB-oriented helpers in `columns.ts`:
+
+- `duckDbStruct`, `duckDbMap` for `STRUCT`/`MAP`.
+- `duckDbList`, `duckDbArray` for DuckDB list/array columns (uses native list semantics).
+- `duckDbTimestamp`, `duckDbDate`, `duckDbTime` for timestamp/date/time handling.
+- `duckDbBlob`, `duckDbInet`, `duckDbInterval` for binary, inet, and interval support.
+- `duckDbArrayContains/Contained/Overlaps` expression helpers backed by DuckDB’s `array_has_*` functions.
+
+They rely on DuckDB-native literals rather than Postgres operators. If you want to avoid Postgres array operators (`@>`, `<@`, `&&`), import these helpers from `@duckdbfan/drizzle-neo-duckdb`.
+
+## Known gaps and behavior differences
+
+This connector is not “full fidelity” with Drizzle’s Postgres driver. Notable partial areas:
+
+- **Date/time handling:** The full timestamp/time/date mode matrix (`string` vs `date`, with/without timezone, precision) still follows DuckDB defaults; the upstream parity matrix remains skipped.
+- **Result aliasing:** DuckDB’s output naming can still collide in especially gnarly subqueries; `queryAdapter` remains unused.
+- **Transactions:** Nested transactions with savepoints are still skipped in the upstream suite; DuckDB semantics differ slightly from Postgres. JSON/JSONB columns stay unsupported.
+- **Runtime ergonomics:** No statement caching/streaming; results are materialized as objects. Map/struct helpers keep minimal validation.
+
+The suite under `test/` documents the remaining divergences; contributions to close them are welcome.
+
+## Developing
+
+- Install: `bun install`
+- Run tests: `bun test`
+- Build bundles and types: `bun run build` (emits `dist/index.mjs` and `dist/index.d.ts`)
+- Publish to npm: `bun run build` then `npm publish` (ESM-only entry point via `exports` map)
+
+Source lives in `src/*.ts`; generated artifacts in `dist/` should never be edited by hand.
 
 ## Contributing
-Contributions are welcome, although I may not be very responsive.
+
+Pull requests are welcome. Please include:
+
+- A short, imperative commit/PR title.
+- Failing/repro tests where possible (`test/<feature>.test.ts` is preferred over modifying the big `duckdb.test.ts` unless necessary).
+- Notes on DuckDB-specific quirks or limitations you encountered.
 
 ## License
-This project is licensed under the Apache License.
+
+Apache-2.0

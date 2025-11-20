@@ -1,6 +1,3 @@
-import { DuckDBInstance } from '@duckdb/node-api';
-import type { DuckDBConnection } from '@duckdb/node-api';
-import { drizzle, DuckDBDatabase } from '../src';
 import {
   alias,
   boolean,
@@ -11,7 +8,11 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 import { DefaultLogger, eq, sql } from 'drizzle-orm';
-import { assert, afterAll, beforeAll, beforeEach, test } from 'vitest';
+import { afterAll, beforeAll, beforeEach, test } from 'vitest';
+import * as nodeAssert from 'node:assert/strict';
+import { DuckDBInstance } from '@duckdb/node-api';
+import type { DuckDBConnection } from '@duckdb/node-api';
+import { drizzle, DuckDBDatabase } from '../src';
 
 const ENABLE_LOGGING = false;
 
@@ -108,7 +109,7 @@ test('return null instead of object if join has no match', async () => {
     .from(users2Table)
     .leftJoin(citiesTable, eq(users2Table.cityId, citiesTable.id));
 
-  assert.deepEqual(res, [
+  nodeAssert.deepEqual(res, [
     {
       id: 1,
       user: {

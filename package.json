@@ -1,8 +1,8 @@
 {
   "name": "@duckdbfan/drizzle-neo-duckdb",
-  "module": "index.ts",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "module": "./dist/index.mjs",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "version": "0.0.8",
   "description": "A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client.",
   "type": "module",
@@ -41,6 +41,22 @@
     "type": "git",
     "url": "git+https://github.com/duckdbfan/drizzle-neo-duckdb.git"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "packageManager": "bun@1.2.2",
   "keywords": [
     "drizzle",
     "duckdb"

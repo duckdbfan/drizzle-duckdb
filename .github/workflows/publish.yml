@@ -1,17 +1,16 @@
-name: CI
+name: Publish
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,5 +30,8 @@ jobs:
       - name: Build package
         run: bun run build
 
-      - name: Validate npm pack
-        run: npm pack --dry-run
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          npm_config_registry: 'https://registry.npmjs.org'
+        run: npm publish --access public
