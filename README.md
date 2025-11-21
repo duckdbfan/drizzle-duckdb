@@ -101,6 +101,10 @@ Pull requests are welcome. Please include:
 - Failing/repro tests where possible (`test/<feature>.test.ts` is preferred over modifying the big `duckdb.test.ts` unless necessary).
 - Notes on DuckDB-specific quirks or limitations you encountered.
 
+## Examples
+
+- A minimal MotherDuck + Drizzle script that reads the built-in `sample_database.nyc.taxi` share lives in `example/motherduck-nyc.ts`. Set `MOTHERDUCK_TOKEN` and run `bun example/motherduck-nyc.ts` (see `example/README.md` for details).
+
 ## License
 
 Apache-2.0

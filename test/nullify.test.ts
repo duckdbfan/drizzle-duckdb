@@ -1,14 +1,6 @@
-import {
-  alias,
-  boolean,
-  char,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-} from 'drizzle-orm/pg-core';
-import { DefaultLogger, eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, test } from 'vitest';
+import { char, integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { eq, sql } from 'drizzle-orm';
+import { afterAll, beforeAll, test } from 'vitest';
 import * as nodeAssert from 'node:assert/strict';
 import { DuckDBInstance } from '@duckdb/node-api';
 import type { DuckDBConnection } from '@duckdb/node-api';

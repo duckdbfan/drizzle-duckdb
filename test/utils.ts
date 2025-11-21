@@ -1,8 +1,9 @@
 // From drizzle codebase. Also lol @ the comment
 
 // shut up eslint you cannot possibly comprehend what's happening here
-// eslint-disable-next-line @typescript-eslint/no-empty-function, @typescript-eslint/no-unused-vars
-export function Expect<T extends true>() {}
+export function Expect<T extends true>(_value?: T) {
+	void _value;
+}
 
 export type Equal<X, Y extends X> = (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y ? 1 : 2) ? true
 	: false;

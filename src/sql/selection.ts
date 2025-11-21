@@ -21,7 +21,9 @@ function mapEntries(
         if (fullJoin && is(value, Column)) {
           return [
             key,
-            sql`${value}`.as(`${getTableName(value.table)}.${value.name}`),
+            sql`${value}`
+              .mapWith(value)
+              .as(`${getTableName(value.table)}.${value.name}`),
           ];
         }
 
@@ -36,7 +38,9 @@ function mapEntries(
         }
 
         if (is(value, SQL) || is(value, Column)) {
-          return [key, (is(value, SQL) ? value : sql`${value}`).as(qualified)];
+          const aliased =
+            is(value, SQL) ? value : sql`${value}`.mapWith(value);
+          return [key, aliased.as(qualified)];
         }
 
         if (is(value, SQL.Aliased)) {

@@ -10,7 +10,7 @@ import {
   drizzle,
   type DuckDBDatabase,
 } from '../src';
-import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { integer, pgTable } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 

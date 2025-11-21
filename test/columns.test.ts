@@ -5,40 +5,18 @@ import {
   DuckDBDatabase,
   duckDbArray,
   duckDbArrayContains,
-  duckDbMap,
   duckDbStruct,
   migrate,
 } from '../src';
 import {
-  alias,
-  boolean,
-  char,
   integer,
   pgTable,
-  text,
-  timestamp,
 } from 'drizzle-orm/pg-core';
-import { DefaultLogger, eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import assert from 'node:assert/strict';
 import { afterAll, beforeAll, test } from 'vitest';
 
 const ENABLE_LOGGING = true;
-
-const citiesTable = pgTable('cities', {
-  id: integer('id')
-    .primaryKey()
-    .default(sql`nextval('serial_cities')`),
-  name: text('name').notNull(),
-  state: char('state', { length: 2 }),
-});
-
-const users2Table = pgTable('users2', {
-  id: integer('id')
-    .primaryKey()
-    .default(sql`nextval('serial_users2')`),
-  name: text('name').notNull(),
-  cityId: integer('city_id').references(() => citiesTable.id),
-});
 
 const structTable = pgTable('struct_table', {
   id: integer('id').primaryKey(),
