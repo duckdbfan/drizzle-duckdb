@@ -28,6 +28,7 @@ function toDecoderInput<TDecoder extends DriverValueDecoder<unknown, unknown>>(
   decoder: TDecoder,
   value: unknown
 ): DecoderInput<TDecoder> {
+  void decoder;
   return value as DecoderInput<TDecoder>;
 }
 
