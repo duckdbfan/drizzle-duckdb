@@ -79,10 +79,8 @@ test('nested selections alias deeply without collisions', async () => {
         name: users.name,
       },
       location: {
-        address: {
-          line1: addresses.line1,
-          city: addresses.city,
-        },
+        line1: addresses.line1,
+        city: addresses.city,
       },
     })
     .from(users)
@@ -92,11 +90,11 @@ test('nested selections alias deeply without collisions', async () => {
   expect(rows).toEqual([
     {
       user: { id: 1, name: 'Neo' },
-      location: { address: { line1: '1 Main St', city: 'Paris' } },
+      location: { line1: '1 Main St', city: 'Paris' },
     },
     {
       user: { id: 2, name: 'Trinity' },
-      location: { address: { line1: '2 Main St', city: 'London' } },
+      location: { line1: '2 Main St', city: 'London' },
     },
   ]);
 });

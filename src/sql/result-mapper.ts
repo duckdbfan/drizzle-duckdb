@@ -28,6 +28,7 @@ function toDecoderInput<TDecoder extends DriverValueDecoder<unknown, unknown>>(
   decoder: TDecoder,
   value: unknown
 ): DecoderInput<TDecoder> {
+  void decoder;
   return value as DecoderInput<TDecoder>;
 }
 
@@ -168,11 +169,12 @@ function mapDriverValue(
   }
 
   if (is(decoder, PgTimestamp)) {
+    const normalized = normalizeTimestamp(rawValue, decoder.withTimezone);
+    if (normalized instanceof Date) {
+      return normalized;
+    }
     return decoder.mapFromDriverValue(
-      toDecoderInput(
-        decoder,
-        normalizeTimestamp(rawValue, decoder.withTimezone)
-      )
+      toDecoderInput(decoder, normalized)
     );
   }
 

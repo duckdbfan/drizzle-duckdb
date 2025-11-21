@@ -7,7 +7,6 @@ import {
   arrayOverlaps,
   asc,
   avg,
-  avgDistinct,
   count,
   countDistinct,
   eq,
@@ -47,11 +46,9 @@ import {
   pgEnum,
   pgMaterializedView,
   pgSchema,
-  pgTable,
   pgTableCreator,
   pgView,
   primaryKey,
-  serial,
   text,
   time,
   timestamp,
@@ -159,10 +156,6 @@ const salEmp = publicSchema.table('sal_emp', {
   name: text('name'),
   payByQuarter: integer('pay_by_quarter').array(),
   schedule: text('schedule').array().array(),
-});
-
-const _tictactoe = publicSchema.table('tictactoe', {
-  squares: integer('squares').array(3).array(3),
 });
 
 const usersMigratorTable = publicSchema.table('users12', {
@@ -624,20 +617,18 @@ test('delete returning sql', async () => {
 	assert.deepEqual(users, [{ name: 'JOHN' }]);
 });
 
-// Currently, update returning causes unique constraint violation
-// see: https://duckdb.org/docs/stable/sql/indexes.html#limitations-of-art-indexes
-test('update returning sql', async () => {
-	const { db } = ctx;
+	// Currently, update returning causes unique constraint violation
+	// see: https://duckdb.org/docs/stable/sql/indexes.html#limitations-of-art-indexes
+	test('update returning sql', async () => {
+		const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
+		await db.insert(usersTable).values({ name: 'John' });
 
-  const currentVals = await db.select().from(usersTable);
-
-	const users = await db
-		.update(usersTable)
-		.set({ name: 'Jane' })
-		.where(eq(usersTable.name, 'John'))
-		.returning({
+		const users = await db
+			.update(usersTable)
+			.set({ name: 'Jane' })
+			.where(eq(usersTable.name, 'John'))
+			.returning({
 			name: sql`upper(${usersTable.name})`,
 		});
 
@@ -2158,19 +2149,19 @@ test('having', async () => {
 	}]);
 
 	const result = await db
-		.select({
-			id: citiesTable.id,
+			.select({
+				id: citiesTable.id,
       // needs to be wrapped in any_value if value isn't aggregated
-			name: sql<string>`any_value(upper(${citiesTable.name}))`,
-			usersCount: sql<number>`count(${users2Table.id})::int`,
-		})
-		.from(citiesTable)
-		.leftJoin(users2Table, eq(users2Table.cityId, citiesTable.id))
-		.where(({ name }) => sql`length(${citiesTable.name}) >= 3`)
-		.groupBy(citiesTable.id)
-    // wass goin on here
-		.having(({ usersCount }) => sql`${usersCount} > 0`)
-		.orderBy(({ name }) => name);
+				name: sql<string>`any_value(upper(${citiesTable.name}))`,
+				usersCount: sql<number>`count(${users2Table.id})::int`,
+			})
+			.from(citiesTable)
+			.leftJoin(users2Table, eq(users2Table.cityId, citiesTable.id))
+			.where(() => sql`length(${citiesTable.name}) >= 3`)
+			.groupBy(citiesTable.id)
+	    // wass goin on here
+			.having(({ usersCount }) => sql`${usersCount} > 0`)
+			.orderBy(({ name }) => name);
 
 	assert.deepEqual(result, [
 		{
@@ -2792,12 +2783,13 @@ test('all date and time columns without timezone first case mode string', async 
 		timestamp_string: string;
 	}>(sql`select * from ${table}`);
 
-	const ts2 =
-		result2[0]?.timestamp_string instanceof Date
-			? result2[0]!.timestamp_string.toISOString().replace('T', ' ').replace('Z', '')
-			: result2[0]?.timestamp_string;
+	const ts2 = result2[0]?.timestamp_string;
+	const ts2String =
+		ts2 instanceof Date
+			? ts2.toISOString().replace('T', ' ')
+			: String(ts2 ?? '');
 
-	assert(ts2?.startsWith('2022-01-01 02:00:00.123'));
+	assert(ts2String.startsWith('2022-01-01 02:00:00.123'));
 
 	await db.execute(sql`drop table if exists ${table}`);
 });
@@ -2830,11 +2822,12 @@ test('all date and time columns without timezone second case mode string', async
 		timestamp_string: string;
 	}>(sql`select * from ${table}`);
 
-	const normalized =
-		result[0]?.timestamp_string instanceof Date
-			? result[0]!.timestamp_string.toISOString().replace('T', ' ').replace('Z', '')
-			: result[0]?.timestamp_string;
-	assert(normalized?.startsWith('2022-01-01 02:00:00.123'));
+	const normalized = result[0]?.timestamp_string;
+	const normalizedString =
+		normalized instanceof Date
+			? normalized.toISOString().replace('T', ' ')
+			: String(normalized ?? '');
+	assert(normalizedString.startsWith('2022-01-01 02:00:00.123'));
 
 	await db.execute(sql`drop table ${table}`);
 });
@@ -2905,10 +2898,7 @@ test('test mode string for timestamp with timezone', async () => {
 	// 2. Select date in string format and check that the values are the same
 	const result = await db.select().from(table);
 
-	const normalized =
-		result[0]?.timestamp instanceof Date
-			? result[0]!.timestamp.toISOString().replace('T', ' ').replace('Z', '+00')
-			: result[0]?.timestamp;
+	const normalized = result[0]?.timestamp;
 	assert(String(normalized).startsWith('2022-01-01 02:00:00.123'));
 
 	// 3. Select as raw query and checke that values are the same
@@ -2918,11 +2908,12 @@ test('test mode string for timestamp with timezone', async () => {
 	}>(sql`select * from ${table}`);
 
 	// 3.1 Notice that postgres will return the date in UTC, but it is exactlt the same
-	const normalized2 =
-		result2[0]?.timestamp_string instanceof Date
-			? result2[0]!.timestamp_string.toISOString().replace('T', ' ').replace('Z', '+00')
-			: result2[0]?.timestamp_string;
-	assert(String(normalized2).startsWith('2022-01-01 02:00:00.123'));
+	const normalized2 = result2[0]?.timestamp_string;
+	const normalized2String =
+		normalized2 instanceof Date
+			? normalized2.toISOString().replace('T', ' ')
+			: String(normalized2 ?? '');
+	assert(normalized2String.startsWith('2022-01-01 02:00:00.123'));
 
 	await db.execute(sql`drop table if exists ${table}`);
 });
@@ -2964,11 +2955,10 @@ test('test mode date for timestamp with timezone', async () => {
 	}>(sql`select * from ${table}`);
 
 	// 3.1 Notice that postgres will return the date in UTC, but it is exactlt the same
-	const ts =
-		result2[0]?.timestamp_string instanceof Date
-			? result2[0]!.timestamp_string.toISOString()
-			: result2[0]?.timestamp_string;
-	assert.deepEqual(ts, '2022-01-01T02:00:00.456Z');
+	const ts = result2[0]?.timestamp_string;
+	const tsString =
+		ts instanceof Date ? ts.toISOString() : String(ts ?? '');
+	assert.deepEqual(tsString, '2022-01-01T02:00:00.456Z');
 
 	await db.execute(sql`drop table if exists ${table}`);
 });

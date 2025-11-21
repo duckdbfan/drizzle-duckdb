@@ -13,7 +13,6 @@ import {
   PgTimestampString,
   PgUUID,
 } from 'drizzle-orm/pg-core';
-import { DuckDBSession } from './session.ts';
 import {
   sql,
   type DriverValueEncoder,

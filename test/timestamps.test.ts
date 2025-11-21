@@ -77,8 +77,12 @@ test('timestamp with timezone maps to Date when mode=date', async () => {
     .from(timestampsTable)
     .where(eq(timestampsTable.id, 1));
 
-  expect(rows[0]!.tsWithTz instanceof Date).toBe(true);
-  expect(rows[0]!.tsWithTz.getTime()).toBe(value.getTime());
+  const tsWithTz = rows[0]?.tsWithTz;
+  expect(tsWithTz).toBeInstanceOf(Date);
+  if (!(tsWithTz instanceof Date)) {
+    throw new Error('tsWithTz should be Date');
+  }
+  expect(tsWithTz.getTime()).toBe(value.getTime());
 });
 
 test('timestamp without timezone maps to string when mode=string', async () => {

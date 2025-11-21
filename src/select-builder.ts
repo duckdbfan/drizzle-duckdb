@@ -11,7 +11,6 @@ import {
   PgTable,
   type PgSession,
 } from 'drizzle-orm/pg-core';
-import { Column } from 'drizzle-orm/column';
 import { Subquery, ViewBaseConfig, type SQLWrapper } from 'drizzle-orm';
 import { PgViewBase } from 'drizzle-orm/pg-core/view-base';
 import type {

@@ -2,7 +2,6 @@ import type { RowData } from 'duckdb-async';
 import { entityKind } from 'drizzle-orm/entity';
 import type { Logger } from 'drizzle-orm/logger';
 import { NoopLogger } from 'drizzle-orm/logger';
-import type { PgDialect } from 'drizzle-orm/pg-core/dialect';
 import { PgTransaction } from 'drizzle-orm/pg-core';
 import type { SelectedFieldsOrdered } from 'drizzle-orm/pg-core/query-builders/select.types';
 import type {
@@ -21,7 +20,7 @@ import { adaptArrayOperators } from './sql/query-rewriters.ts';
 import { mapResultRow } from './sql/result-mapper.ts';
 import type { DuckDBDialect } from './dialect.ts';
 import { TransactionRollbackError } from 'drizzle-orm/errors';
-import type { DuckDBClient, DuckDBClientLike } from './client.ts';
+import type { DuckDBClientLike } from './client.ts';
 import {
   closeClientConnection,
   executeOnClient,
@@ -90,7 +89,7 @@ export class DuckDBPreparedQuery<
   }
 
   isResponseInArrayMode(): boolean {
-    return false;
+    return this._isResponseInArrayMode;
   }
 }
 
@@ -123,6 +122,7 @@ export class DuckDBSession<
     isResponseInArrayMode: boolean,
     customResultMapper?: (rows: unknown[][]) => T['execute']
   ): PgPreparedQuery<T> {
+    void name; // DuckDB doesn't support prepared statement names but the signature must match.
     return new DuckDBPreparedQuery(
       this.client,
       query.sql,
