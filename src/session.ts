@@ -31,12 +31,16 @@ export class DuckDBPreparedQuery<
 
   constructor(
     private client: DuckDBClientLike,
+    private dialect: DuckDBDialect,
     private queryString: string,
     private params: unknown[],
     private logger: Logger,
     private fields: SelectedFieldsOrdered | undefined,
     private _isResponseInArrayMode: boolean,
-    private customResultMapper?: (rows: unknown[][]) => T['execute']
+    private customResultMapper: ((rows: unknown[][]) => T['execute']) | undefined,
+    private rewriteArrays: boolean,
+    private rejectStringArrayLiterals: boolean,
+    private warnOnStringArrayLiteral?: (sql: string) => void
   ) {
     super({ sql: queryString, params });
   }
@@ -44,10 +48,26 @@ export class DuckDBPreparedQuery<
   async execute(
     placeholderValues: Record<string, unknown> | undefined = {}
   ): Promise<T['execute']> {
+    this.dialect.assertNoPgJsonColumns();
     const params = prepareParams(
-      fillPlaceholders(this.params, placeholderValues)
+      fillPlaceholders(this.params, placeholderValues),
+      {
+        rejectStringArrayLiterals: this.rejectStringArrayLiterals,
+        warnOnStringArrayLiteral: this.warnOnStringArrayLiteral
+          ? () => this.warnOnStringArrayLiteral?.(this.queryString)
+          : undefined,
+      }
     );
-    const rewrittenQuery = adaptArrayOperators(this.queryString);
+    const rewrittenQuery = this.rewriteArrays
+      ? adaptArrayOperators(this.queryString)
+      : this.queryString;
+
+    if (this.rewriteArrays && rewrittenQuery !== this.queryString) {
+      this.logger.logQuery(
+        `[duckdb] original query before array rewrite: ${this.queryString}`,
+        params
+      );
+    }
 
     this.logger.logQuery(rewrittenQuery, params);
 
@@ -89,6 +109,8 @@ export class DuckDBPreparedQuery<
 
 export interface DuckDBSessionOptions {
   logger?: Logger;
+  rewriteArrays?: boolean;
+  rejectStringArrayLiterals?: boolean;
 }
 
 export class DuckDBSession<
@@ -98,6 +120,9 @@ export class DuckDBSession<
   static readonly [entityKind]: string = 'DuckDBSession';
 
   private logger: Logger;
+  private rewriteArrays: boolean;
+  private rejectStringArrayLiterals: boolean;
+  private hasWarnedArrayLiteral = false;
 
   constructor(
     private client: DuckDBClientLike,
@@ -107,6 +132,8 @@ export class DuckDBSession<
   ) {
     super(dialect);
     this.logger = options.logger ?? new NoopLogger();
+    this.rewriteArrays = options.rewriteArrays ?? true;
+    this.rejectStringArrayLiterals = options.rejectStringArrayLiterals ?? false;
   }
 
   prepareQuery<T extends PreparedQueryConfig = PreparedQueryConfig>(
@@ -119,12 +146,16 @@ export class DuckDBSession<
     void name; // DuckDB doesn't support prepared statement names but the signature must match.
     return new DuckDBPreparedQuery(
       this.client,
+      this.dialect,
       query.sql,
       query.params,
       this.logger,
       fields,
       isResponseInArrayMode,
-      customResultMapper
+      customResultMapper,
+      this.rewriteArrays,
+      this.rejectStringArrayLiterals,
+      this.rejectStringArrayLiterals ? undefined : this.warnOnStringArrayLiteral
     );
   }
 
@@ -155,6 +186,17 @@ export class DuckDBSession<
       throw error;
     }
   }
+
+  private warnOnStringArrayLiteral = (query: string) => {
+    if (this.hasWarnedArrayLiteral) {
+      return;
+    }
+    this.hasWarnedArrayLiteral = true;
+    this.logger.logQuery(
+      `[duckdb] ${arrayLiteralWarning}\nquery: ${query}`,
+      []
+    );
+  };
 }
 
 type PgTransactionInternals<
@@ -220,6 +262,10 @@ export class DuckDBTransaction<
 export type GenericRowData<T extends RowData = RowData> = T;
 
 export type GenericTableData<T = RowData> = T[];
+
+const arrayLiteralWarning =
+  'Received a stringified Postgres-style array literal. Use duckDbList()/duckDbArray() or pass native arrays instead. You can also set rejectStringArrayLiterals=true to throw.';
+
 
 export interface DuckDBQueryResultHKT extends PgQueryResultHKT {
   type: GenericTableData<Assume<this['row'], RowData>>;

@@ -24,6 +24,8 @@ import { aliasFields } from './sql/selection.ts';
 
 export interface PgDriverOptions {
   logger?: Logger;
+  rewriteArrays?: boolean;
+  rejectStringArrayLiterals?: boolean;
 }
 
 export class DuckDBDriver {
@@ -40,15 +42,24 @@ export class DuckDBDriver {
   ): DuckDBSession<Record<string, unknown>, TablesRelationalConfig> {
     return new DuckDBSession(this.client, this.dialect, schema, {
       logger: this.options.logger,
+      rewriteArrays: this.options.rewriteArrays,
+      rejectStringArrayLiterals: this.options.rejectStringArrayLiterals,
     });
   }
+}
+
+export interface DuckDBDrizzleConfig<
+  TSchema extends Record<string, unknown> = Record<string, never>
+> extends DrizzleConfig<TSchema> {
+  rewriteArrays?: boolean;
+  rejectStringArrayLiterals?: boolean;
 }
 
 export function drizzle<
   TSchema extends Record<string, unknown> = Record<string, never>
 >(
   client: DuckDBClientLike,
-  config: DrizzleConfig<TSchema> = {}
+  config: DuckDBDrizzleConfig<TSchema> = {}
 ): DuckDBDatabase<TSchema, ExtractTablesWithRelations<TSchema>> {
   const dialect = new DuckDBDialect();
 
@@ -69,7 +80,11 @@ export function drizzle<
     };
   }
 
-  const driver = new DuckDBDriver(client, dialect, { logger });
+  const driver = new DuckDBDriver(client, dialect, {
+    logger,
+    rewriteArrays: config.rewriteArrays,
+    rejectStringArrayLiterals: config.rejectStringArrayLiterals,
+  });
   const session = driver.createSession(schema);
 
   return new DuckDBDatabase(dialect, session, schema) as DuckDBDatabase<

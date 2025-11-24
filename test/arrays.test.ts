@@ -11,6 +11,7 @@ import {
 import { integer, pgTable } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import { arrayContains, arrayOverlaps, sql } from 'drizzle-orm';
+import { adaptArrayOperators } from '../src/sql/query-rewriters.ts';
 
 const ENABLE_LOGGING = false;
 
@@ -90,4 +91,13 @@ test('Postgres array operators are rewritten to DuckDB functions', async () => {
 
   expect(containsOrm).toEqual([{ id: 1 }, { id: 3 }]);
   expect(overlapsOrm).toEqual([{ id: 1 }, { id: 3 }]);
+});
+
+test('adaptArrayOperators preserves parentheses and complex expressions', () => {
+  const query =
+    'select * from items where (tags @> list_value(1, 2)) and ((numbers && array[2,3]))';
+  const rewritten = adaptArrayOperators(query);
+
+  expect(rewritten).toContain('array_has_all(tags, list_value(1, 2))');
+  expect(rewritten).toContain('array_has_any(numbers, array[2,3])');
 });

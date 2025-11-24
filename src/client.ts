@@ -7,11 +7,16 @@ import {
 export type DuckDBClientLike = DuckDBConnection;
 export type RowData = Record<string, unknown>;
 
-function parsePgArrayLiteral(value: string): unknown {
-  if (!value.startsWith('{') || !value.endsWith('}')) {
-    return value;
-  }
+export interface PrepareParamsOptions {
+  rejectStringArrayLiterals?: boolean;
+  warnOnStringArrayLiteral?: () => void;
+}
 
+function isPgArrayLiteral(value: string): boolean {
+  return value.startsWith('{') && value.endsWith('}');
+}
+
+function parsePgArrayLiteral(value: string): unknown {
   const json = value.replace(/{/g, '[').replace(/}/g, ']');
 
   try {
@@ -21,9 +26,24 @@ function parsePgArrayLiteral(value: string): unknown {
   }
 }
 
-export function prepareParams(params: unknown[]): unknown[] {
+let warnedArrayLiteral = false;
+
+export function prepareParams(
+  params: unknown[],
+  options: PrepareParamsOptions = {}
+): unknown[] {
   return params.map((param) => {
-    if (typeof param === 'string') {
+    if (typeof param === 'string' && isPgArrayLiteral(param)) {
+      if (options.rejectStringArrayLiterals) {
+        throw new Error(
+          'Stringified array literals are not supported. Use duckDbList()/duckDbArray() or pass native arrays.'
+        );
+      }
+
+      if (!warnedArrayLiteral && options.warnOnStringArrayLiteral) {
+        warnedArrayLiteral = true;
+        options.warnOnStringArrayLiteral();
+      }
       return parsePgArrayLiteral(param);
     }
     return param;
