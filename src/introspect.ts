@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { RowData } from './client.ts';
 import type { DuckDBDatabase } from './driver.ts';
 
 const SYSTEM_SCHEMAS = new Set(['information_schema', 'pg_catalog']);
@@ -11,13 +12,13 @@ export interface IntrospectOptions {
   importBasePath?: string;
 }
 
-interface DuckDbTableRow {
+interface DuckDbTableRow extends RowData {
   schema_name: string;
   table_name: string;
   table_type: string;
 }
 
-interface DuckDbColumnRow {
+interface DuckDbColumnRow extends RowData {
   schema_name: string;
   table_name: string;
   column_name: string;
@@ -31,7 +32,7 @@ interface DuckDbColumnRow {
   internal: boolean | null;
 }
 
-interface DuckDbConstraintRow {
+interface DuckDbConstraintRow extends RowData {
   schema_name: string;
   table_name: string;
   constraint_name: string;
@@ -42,7 +43,7 @@ interface DuckDbConstraintRow {
   referenced_column_names: string[] | null;
 }
 
-interface DuckDbIndexRow {
+interface DuckDbIndexRow extends RowData {
   schema_name: string;
   table_name: string;
   index_name: string;

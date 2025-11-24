@@ -119,6 +119,7 @@ export class DuckDBSession<
 > extends PgSession<DuckDBQueryResultHKT, TFullSchema, TSchema> {
   static readonly [entityKind]: string = 'DuckDBSession';
 
+  protected override dialect: DuckDBDialect;
   private logger: Logger;
   private rewriteArrays: boolean;
   private rejectStringArrayLiterals: boolean;
@@ -131,6 +132,7 @@ export class DuckDBSession<
     private options: DuckDBSessionOptions = {}
   ) {
     super(dialect);
+    this.dialect = dialect;
     this.logger = options.logger ?? new NoopLogger();
     this.rewriteArrays = options.rewriteArrays ?? true;
     this.rejectStringArrayLiterals = options.rejectStringArrayLiterals ?? false;

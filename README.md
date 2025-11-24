@@ -59,13 +59,6 @@ connection.closeSync();
 
 Use `migrate(db, './path/to/migrations')` (or pass the full `MigrationConfig`) to apply SQL files. Migration metadata lives in the `drizzle.__drizzle_migrations` table by default with a schema-local sequence named `__drizzle_migrations_id_seq`; custom `migrationsSchema`/`migrationsTable` values get their own scoped sequence as well.
 
-## Introspection (DuckDB)
-
-- Generate schema code straight from DuckDB: `bun x duckdb-introspect --url ':memory:' --schema my_schema --out ./drizzle/schema.ts`.
-- Defaults target DuckDB helpers (e.g., `duckDbTimestamp`, `duckDbJson`, `duckDbStruct`, `duckDbList`) and avoid Postgres JSON/JSONB.
-- Pass `--use-pg-time` to emit pg-core `timestamp/date/time` builders instead of the DuckDB-specific variants.
-- MotherDuck URLs (`md:`) pick up `MOTHERDUCK_TOKEN` automatically when present; views stay excluded unless you pass `--include-views`.
-
 ## Custom column helpers (experimental)
 
 The package ships a few DuckDB-oriented helpers in `columns.ts`:
@@ -77,6 +70,14 @@ The package ships a few DuckDB-oriented helpers in `columns.ts`:
 - `duckDbArrayContains/Contained/Overlaps` expression helpers backed by DuckDB’s `array_has_*` functions.
 
 They rely on DuckDB-native literals rather than Postgres operators. If you want to avoid Postgres array operators (`@>`, `<@`, `&&`), import these helpers from `@leonardovida-md/drizzle-neo-duckdb`.
+
+## Introspection (DuckDB)
+
+- CLI: `bun x duckdb-introspect --url ':memory:' --schema my_schema --out ./drizzle/schema.ts`
+  - Options: `--schema a,b` (defaults to all non-system schemas), `--include-views`, `--use-pg-time` (emit pg-core date/time/timestamp), `--import-base <path>` to override the helper import path.
+  - MotherDuck URLs (`md:`) pick up `MOTHERDUCK_TOKEN` automatically; views are skipped unless `--include-views` is set.
+- Programmatic: `const { files } = await introspect(db, { schemas: ['my_schema'] });` — `files.schemaTs` contains Drizzle pg-core + DuckDB helper definitions (lists/arrays/struct/map/json, inet/interval/blob, custom timestamps).
+- JSON always maps to `duckDbJson` (never Pg JSON/JSONB); timestamps default to `duckDbTimestamp/Date/Time` to match this dialect’s normalization.
 
 ## Known gaps and behavior differences
 

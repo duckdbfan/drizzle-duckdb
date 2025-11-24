@@ -1,0 +1,103 @@
+name: MotherDuck Integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build package
+        run: bun run build
+
+      - name: Run nyc taxi example
+        run: bun example/motherduck-nyc.ts
+
+      - name: Seed MotherDuck CI schema
+        run: |
+          bun <<'EOF'
+          import { DuckDBInstance } from '@duckdb/node-api';
+
+          const token = process.env.MOTHERDUCK_TOKEN;
+          if (!token) {
+            throw new Error('MOTHERDUCK_TOKEN is required');
+          }
+
+          const instance = await DuckDBInstance.create('md:', { motherduck_token: token });
+          const connection = await instance.connect();
+
+          await connection.run(`create schema if not exists ci_extension;`);
+          await connection.run(`create or replace table ci_extension.ci_contacts as
+            select 1 as id, 'alice' as name, 30 as age
+            union all select 2 as id, 'bob' as name, 34 as age;
+          `);
+          await connection.run(`create or replace table ci_extension.ci_orders as
+            select 1 as order_id, 1 as customer_id, 100.50 as total
+            union all select 2 as order_id, 2 as customer_id, 50.25 as total;
+          `);
+
+          await connection.close();
+          instance.closeSync();
+          EOF
+
+      - name: Introspect seeded schema
+        run: |
+          bun ./dist/duckdb-introspect.mjs --url md: --schemas ci_extension --out /tmp/motherduck/schema.ts
+          test -s /tmp/motherduck/schema.ts
+          grep -q "ci_contacts" /tmp/motherduck/schema.ts
+          grep -q "ci_orders" /tmp/motherduck/schema.ts
+
+      - name: MotherDuck integration tests
+        run: bun test test/motherduck.integration.test.ts
+
+      - name: Complex join & aggregation smoke test
+        run: |
+          bun <<'EOF'
+          import { DuckDBInstance } from '@duckdb/node-api';
+          import { drizzle } from './dist/index.mjs';
+          import { sql } from 'drizzle-orm';
+
+          const token = process.env.MOTHERDUCK_TOKEN;
+          if (!token) {
+            throw new Error('MOTHERDUCK_TOKEN is required');
+          }
+
+          const instance = await DuckDBInstance.create('md:', { motherduck_token: token });
+          const connection = await instance.connect();
+          const db = drizzle(connection);
+
+          const taxiSample = await db.execute(sql`select count(*) as count from sample_data.nyc.taxi limit 1`);
+          if (!taxiSample?.length || Number(taxiSample[0]?.count ?? 0) <= 0) {
+            throw new Error('sample_data.nyc.taxi returned no rows');
+          }
+
+          const joinResults = await db.execute(sql`
+            select c.name, sum(o.total) as total
+            from ci_extension.ci_contacts c
+            join ci_extension.ci_orders o on o.customer_id = c.id
+            group by c.name
+            order by total desc;
+          `);
+
+          if (joinResults.length !== 2) {
+            throw new Error(`Unexpected join row count: ${joinResults.length}`);
+          }
+
+          await connection.close();
+          instance.closeSync();
+          EOF
