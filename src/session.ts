@@ -1,4 +1,3 @@
-import type { RowData } from 'duckdb-async';
 import { entityKind } from 'drizzle-orm/entity';
 import type { Logger } from 'drizzle-orm/logger';
 import { NoopLogger } from 'drizzle-orm/logger';
@@ -20,15 +19,10 @@ import { adaptArrayOperators } from './sql/query-rewriters.ts';
 import { mapResultRow } from './sql/result-mapper.ts';
 import type { DuckDBDialect } from './dialect.ts';
 import { TransactionRollbackError } from 'drizzle-orm/errors';
-import type { DuckDBClientLike } from './client.ts';
-import {
-  closeClientConnection,
-  executeOnClient,
-  hasConnect,
-  prepareParams,
-} from './client.ts';
+import type { DuckDBClientLike, RowData } from './client.ts';
+import { executeOnClient, prepareParams } from './client.ts';
 
-export type { DuckDBClient, DuckDBClientLike } from './client.ts';
+export type { DuckDBClientLike, RowData } from './client.ts';
 
 export class DuckDBPreparedQuery<
   T extends PreparedQueryConfig
@@ -137,14 +131,8 @@ export class DuckDBSession<
   override async transaction<T>(
     transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
   ): Promise<T> {
-    const client = this.client;
-    const clientHasConnect = hasConnect(client);
-    const connection = clientHasConnect
-      ? await client.connect()
-      : client;
-
     const session = new DuckDBSession(
-      connection,
+      this.client,
       this.dialect,
       this.schema,
       this.options
@@ -165,10 +153,6 @@ export class DuckDBSession<
     } catch (error) {
       await tx.execute(sql`rollback`);
       throw error;
-    } finally {
-      if (clientHasConnect) {
-        await closeClientConnection(connection);
-      }
     }
   }
 }

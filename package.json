@@ -1,5 +1,5 @@
 {
-  "name": "@duckdbfan/drizzle-neo-duckdb",
+  "name": "@leonardovida-md/drizzle-neo-duckdb",
   "module": "./dist/index.mjs",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -14,14 +14,10 @@
   },
   "peerDependencies": {
     "@duckdb/node-api": "1.4.2-r.1",
-    "drizzle-orm": "^0.40.0",
-    "duckdb-async": "^1.0.0"
+    "drizzle-orm": "^0.40.0"
   },
   "peerDependenciesMeta": {
     "@duckdb/node-api": {
-      "optional": true
-    },
-    "duckdb-async": {
       "optional": true
     }
   },
@@ -31,7 +27,6 @@
     "@types/uuid": "^10.0.0",
     "@vitest/ui": "^1.6.0",
     "drizzle-orm": "0.40.0",
-    "duckdb-async": "^1.2.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.2",
     "uuid": "^10.0.0",
@@ -39,7 +34,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/duckdbfan/drizzle-neo-duckdb.git"
+    "url": "git+https://github.com/leonardovida-md/drizzle-neo-duckdb.git"
   },
   "exports": {
     ".": {
@@ -64,9 +59,9 @@
   "author": "M L",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/duckdbfan/drizzle-neo-duckdb/issues"
+    "url": "https://github.com/leonardovida-md/drizzle-neo-duckdb/issues"
   },
-  "homepage": "https://github.com/duckdbfan/drizzle-neo-duckdb#readme",
+  "homepage": "https://github.com/leonardovida-md/drizzle-neo-duckdb#readme",
   "files": [
     "src/*.ts",
     "dist/*.mjs",

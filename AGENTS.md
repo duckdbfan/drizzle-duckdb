@@ -16,7 +16,7 @@
 - Document DuckDB-vs-Postgres behavior inline (e.g., aliasing or result mapping quirks in `utils.ts` and `DuckDBSelectBuilder`).
 
 ## DuckDB Runtime Notes
-- Preferred client is `@duckdb/node-api@1.4.2-r.1` (used by tests); `duckdb-async` is still supported but not the default. Stick to `Database.create(':memory:')`/`DuckDBInstance.create(':memory:')` for hermetic runs.
+- Preferred client is `@duckdb/node-api@1.4.2-r.1` (used by tests). Stick to `DuckDBInstance.create(':memory:')` (or `DuckDBConnection.create`) for hermetic runs.
 - Clean up connections with `closeSync`/`close`/`disconnectSync` and avoid leaving `.duckdb` files in the repo.
 - Custom column helpers live in `columns.ts` (`duckDbStruct`, `duckDbMap`, `duckDbBlob`); JSON-like structures should use these or Drizzle custom types rather than native JSON columns.
 
