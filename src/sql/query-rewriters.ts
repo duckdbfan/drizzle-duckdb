@@ -43,7 +43,7 @@ export function adaptArrayOperators(query: string): string {
       } else if (ch === '(' || ch === '[') {
         depth--;
         if (depth < 0) {
-          return [idx, source.slice(idx, start + 1)];
+          return [idx + 1, source.slice(idx + 1, start + 1)];
         }
       } else if (depth === 0 && isWhitespace(ch)) {
         return [idx + 1, source.slice(idx + 1, start + 1)];
@@ -71,7 +71,7 @@ export function adaptArrayOperators(query: string): string {
       } else if (ch === ')' || ch === ']') {
         depth--;
         if (depth < 0) {
-          return [idx + 1, source.slice(start, idx + 1)];
+          return [idx, source.slice(start, idx)];
         }
       } else if (depth === 0 && isWhitespace(ch)) {
         return [idx, source.slice(start, idx)];

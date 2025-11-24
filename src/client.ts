@@ -1,37 +1,22 @@
-import type { Connection, Database, RowData } from 'duckdb-async';
 import {
   listValue,
-  type DuckDBConnection as NodeApiDuckDBConnection,
-  type DuckDBValue as NodeApiDuckDBValue,
+  type DuckDBConnection,
+  type DuckDBValue,
 } from '@duckdb/node-api';
 
-export type DuckDBClient = Database;
-export type DuckDBClientLike =
-  | DuckDBClient
-  | Connection
-  | NodeApiDuckDBConnection;
+export type DuckDBClientLike = DuckDBConnection;
+export type RowData = Record<string, unknown>;
 
-function isDuckDbAsyncClient(
-  client: DuckDBClientLike
-): client is DuckDBClient | Connection {
-  return typeof (client as Connection).all === 'function';
+export interface PrepareParamsOptions {
+  rejectStringArrayLiterals?: boolean;
+  warnOnStringArrayLiteral?: () => void;
 }
 
-function isNodeApiClient(
-  client: DuckDBClientLike
-): client is NodeApiDuckDBConnection {
-  return typeof (client as NodeApiDuckDBConnection).run === 'function';
-}
-
-export function hasConnect(client: DuckDBClientLike): client is DuckDBClient {
-  return typeof (client as DuckDBClient).connect === 'function';
+function isPgArrayLiteral(value: string): boolean {
+  return value.startsWith('{') && value.endsWith('}');
 }
 
 function parsePgArrayLiteral(value: string): unknown {
-  if (!value.startsWith('{') || !value.endsWith('}')) {
-    return value;
-  }
-
   const json = value.replace(/{/g, '[').replace(/}/g, ']');
 
   try {
@@ -41,24 +26,39 @@ function parsePgArrayLiteral(value: string): unknown {
   }
 }
 
-export function prepareParams(params: unknown[]): unknown[] {
+let warnedArrayLiteral = false;
+
+export function prepareParams(
+  params: unknown[],
+  options: PrepareParamsOptions = {}
+): unknown[] {
   return params.map((param) => {
-    if (typeof param === 'string') {
+    if (typeof param === 'string' && isPgArrayLiteral(param)) {
+      if (options.rejectStringArrayLiterals) {
+        throw new Error(
+          'Stringified array literals are not supported. Use duckDbList()/duckDbArray() or pass native arrays.'
+        );
+      }
+
+      if (!warnedArrayLiteral && options.warnOnStringArrayLiteral) {
+        warnedArrayLiteral = true;
+        options.warnOnStringArrayLiteral();
+      }
       return parsePgArrayLiteral(param);
     }
     return param;
   });
 }
 
-function toNodeApiValue(value: unknown): NodeApiDuckDBValue {
+function toNodeApiValue(value: unknown): DuckDBValue {
   if (Array.isArray(value)) {
     return listValue(value.map((inner) => toNodeApiValue(inner)));
   }
-  return value as NodeApiDuckDBValue;
+  return value as DuckDBValue;
 }
 
 export async function closeClientConnection(
-  connection: Connection | NodeApiDuckDBConnection
+  connection: DuckDBConnection
 ): Promise<void> {
   if ('close' in connection && typeof connection.close === 'function') {
     await connection.close();
@@ -86,29 +86,25 @@ export async function executeOnClient(
   query: string,
   params: unknown[]
 ): Promise<RowData[]> {
-  if (isDuckDbAsyncClient(client)) {
-    return (await client.all(query, ...params)) ?? [];
-  }
+  const values =
+    params.length > 0
+      ? (params.map((param) => toNodeApiValue(param)) as DuckDBValue[])
+      : undefined;
+  const result = await client.run(query, values);
+  const rows = await result.getRowsJS();
+  const columns = result.columnNames();
+  const seen: Record<string, number> = {};
+  const uniqueColumns = columns.map((col) => {
+    const count = seen[col] ?? 0;
+    seen[col] = count + 1;
+    return count === 0 ? col : `${col}_${count}`;
+  });
 
-  if (isNodeApiClient(client)) {
-    const values =
-      params.length > 0
-        ? (params.map((param) => toNodeApiValue(param)) as NodeApiDuckDBValue[])
-        : undefined;
-    const result = await client.run(query, values);
-    const rows = await result.getRowsJS();
-    const columns = result.columnNames();
-
-    return (rows ?? []).map((vals) => {
-      const obj: Record<string, unknown> = {};
-      columns.forEach((col, idx) => {
-        obj[col] = vals[idx];
-      });
-      return obj;
-    }) as RowData[];
-  }
-
-  throw new Error(
-    'Unsupported DuckDB client: expected duckdb-async Database/Connection or @duckdb/node-api Connection.'
-  );
+  return (rows ?? []).map((vals) => {
+    const obj: Record<string, unknown> = {};
+    uniqueColumns.forEach((col, idx) => {
+      obj[col] = vals[idx];
+    });
+    return obj;
+  }) as RowData[];
 }

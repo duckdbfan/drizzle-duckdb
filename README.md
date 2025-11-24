@@ -1,24 +1,22 @@
 # drizzle-neo-duckdb
 
-DuckDB dialect glue for [drizzle-orm](https://orm.drizzle.team/), built on the Postgres driver surface but targeting DuckDB. The focus is to get Drizzle’s query builder, migrations, and type inference working against DuckDB’s Node runtimes.
+DuckDB dialect glue for [drizzle-orm](https://orm.drizzle.team/), built on the Postgres driver surface but targeting DuckDB. Published from the `@leonardovida-md` scope with a focus on getting Drizzle’s query builder, migrations, and type inference working against DuckDB’s Node runtime.
 
-- **Runtime targets:** `@duckdb/node-api@1.4.2-r.1` (recommended) and `duckdb-async` (legacy, optional peer).
+- **Runtime target:** `@duckdb/node-api@1.4.2-r.1` (DuckDB Node API only).
 - **Module format:** ESM only, `moduleResolution: bundler`, explicit `.ts` extensions in source.
 - **Status:** Experimental; feature coverage is still growing and several DuckDB-specific types/behaviors are missing (see below).
 
 ## Installation
 
 ```sh
-bun add @duckdbfan/drizzle-neo-duckdb @duckdb/node-api@1.4.2-r.1
-# optionally, if you prefer the duckdb-async wrapper
-# bun add duckdb-async
+bun add @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api@1.4.2-r.1
 ```
 
 ## Quick start (Node API)
 
 ```ts
 import { DuckDBInstance } from '@duckdb/node-api';
-import { drizzle } from '@duckdbfan/drizzle-neo-duckdb';
+import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
 import { DefaultLogger, sql } from 'drizzle-orm';
 import { char, integer, pgSchema, text } from 'drizzle-orm/pg-core';
 
@@ -61,6 +59,13 @@ connection.closeSync();
 
 Use `migrate(db, './path/to/migrations')` (or pass the full `MigrationConfig`) to apply SQL files. Migration metadata lives in the `drizzle.__drizzle_migrations` table by default with a schema-local sequence named `__drizzle_migrations_id_seq`; custom `migrationsSchema`/`migrationsTable` values get their own scoped sequence as well.
 
+## Introspection (DuckDB)
+
+- Generate schema code straight from DuckDB: `bun x duckdb-introspect --url ':memory:' --schema my_schema --out ./drizzle/schema.ts`.
+- Defaults target DuckDB helpers (e.g., `duckDbTimestamp`, `duckDbJson`, `duckDbStruct`, `duckDbList`) and avoid Postgres JSON/JSONB.
+- Pass `--use-pg-time` to emit pg-core `timestamp/date/time` builders instead of the DuckDB-specific variants.
+- MotherDuck URLs (`md:`) pick up `MOTHERDUCK_TOKEN` automatically when present; views stay excluded unless you pass `--include-views`.
+
 ## Custom column helpers (experimental)
 
 The package ships a few DuckDB-oriented helpers in `columns.ts`:
@@ -71,15 +76,15 @@ The package ships a few DuckDB-oriented helpers in `columns.ts`:
 - `duckDbBlob`, `duckDbInet`, `duckDbInterval` for binary, inet, and interval support.
 - `duckDbArrayContains/Contained/Overlaps` expression helpers backed by DuckDB’s `array_has_*` functions.
 
-They rely on DuckDB-native literals rather than Postgres operators. If you want to avoid Postgres array operators (`@>`, `<@`, `&&`), import these helpers from `@duckdbfan/drizzle-neo-duckdb`.
+They rely on DuckDB-native literals rather than Postgres operators. If you want to avoid Postgres array operators (`@>`, `<@`, `&&`), import these helpers from `@leonardovida-md/drizzle-neo-duckdb`.
 
 ## Known gaps and behavior differences
 
 This connector is not “full fidelity” with Drizzle’s Postgres driver. Notable partial areas:
 
-- **Date/time handling:** The full timestamp/time/date mode matrix (`string` vs `date`, with/without timezone, precision) still follows DuckDB defaults; the upstream parity matrix remains skipped.
-- **Result aliasing:** DuckDB’s output naming can still collide in especially gnarly subqueries; `queryAdapter` remains unused.
-- **Transactions:** Nested transactions with savepoints are still skipped in the upstream suite; DuckDB semantics differ slightly from Postgres. JSON/JSONB columns stay unsupported.
+- **Date/time handling:** The full timestamp/time/date mode matrix (`string` vs `date`, with/without timezone, precision) still follows DuckDB defaults, but offset strings now normalize correctly in both string and Date modes.
+- **Result aliasing:** Node API results keep duplicate column aliases in order and suffix repeats to avoid collisions during deep selections.
+- **Transactions:** Nested `transaction` calls reuse the outer transaction context (DuckDB doesn’t support `SAVEPOINT`), so inner rollbacks abort the whole transaction. JSON/JSONB columns stay unsupported.
 - **Runtime ergonomics:** No statement caching/streaming; results are materialized as objects. Map/struct helpers keep minimal validation.
 
 The suite under `test/` documents the remaining divergences; contributions to close them are welcome.

@@ -51,6 +51,29 @@ type StructColType = `STRUCT (${string})`;
 
 type Primitive = AnyColType | ListColType | ArrayColType | StructColType;
 
+function coerceArrayString(value: string): unknown[] | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+  if (trimmed.startsWith('[')) {
+    try {
+      return JSON.parse(trimmed) as unknown[];
+    } catch {
+      return undefined;
+    }
+  }
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const json = trimmed.replace(/{/g, '[').replace(/}/g, ']');
+      return JSON.parse(json) as unknown[];
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 function formatLiteral(value: unknown, typeHint?: string): string {
   if (value === null || value === undefined) {
     return 'NULL';
@@ -143,11 +166,13 @@ export const duckDbList = <TData = unknown>(
       if (Array.isArray(value)) {
         return value as TData[];
       }
-      try {
-        return JSON.parse(value as string) as TData[];
-      } catch {
-        return [] as TData[];
+      if (typeof value === 'string') {
+        const parsed = coerceArrayString(value);
+        if (parsed) {
+          return parsed as TData[];
+        }
       }
+      return [] as TData[];
     },
   })(name);
 
@@ -169,11 +194,13 @@ export const duckDbArray = <TData = unknown>(
       if (Array.isArray(value)) {
         return value as TData[];
       }
-      try {
-        return JSON.parse(value as string) as TData[];
-      } catch {
-        return [] as TData[];
+      if (typeof value === 'string') {
+        const parsed = coerceArrayString(value);
+        if (parsed) {
+          return parsed as TData[];
+        }
       }
+      return [] as TData[];
     },
   })(name);
 
@@ -217,6 +244,40 @@ export const duckDbStruct = <TData extends Record<string, any>>(
         }
       }
       return value;
+    },
+  })(name);
+
+export const duckDbJson = <TData = unknown>(name: string) =>
+  customType<{ data: TData; driverData: SQL | string }>({
+    dataType() {
+      return 'JSON';
+    },
+    toDriver(value: TData) {
+      if (typeof value === 'string') {
+        return value;
+      }
+      if (
+        value !== null &&
+        typeof value === 'object' &&
+        'queryChunks' in (value as Record<string, unknown>)
+      ) {
+        return value as unknown as SQL;
+      }
+      return JSON.stringify(value ?? null);
+    },
+    fromDriver(value: SQL | string) {
+      if (typeof value !== 'string') {
+        return value as unknown as TData;
+      }
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return value as unknown as TData;
+      }
+      try {
+        return JSON.parse(trimmed) as TData;
+      } catch {
+        return value as unknown as TData;
+      }
     },
   })(name);
 
@@ -294,9 +355,12 @@ export const duckDbTimestamp = (
       }
       const stringValue =
         typeof value === 'string' ? value : value.toString();
-      const normalized = !stringValue.endsWith('Z')
-        ? `${stringValue.replace(' ', 'T')}Z`
-        : stringValue;
+      const hasOffset =
+        stringValue.endsWith('Z') ||
+        /[+-]\d{2}:?\d{2}$/.test(stringValue);
+      const normalized = hasOffset
+        ? stringValue.replace(' ', 'T')
+        : `${stringValue.replace(' ', 'T')}Z`;
       return new Date(normalized);
     },
   })(name);

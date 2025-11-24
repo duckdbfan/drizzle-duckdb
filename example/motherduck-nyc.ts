@@ -1,6 +1,6 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import type { DuckDBConnection } from '@duckdb/node-api';
-import { drizzle } from '@duckdbfan/drizzle-neo-duckdb';
+import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
 import { sql } from 'drizzle-orm';
 import { doublePrecision, integer, pgTable, timestamp } from 'drizzle-orm/pg-core';
 

@@ -21,6 +21,15 @@ import {
 
 export class DuckDBDialect extends PgDialect {
   static readonly [entityKind]: string = 'DuckDBPgDialect';
+  private hasPgJsonColumn = false;
+
+  assertNoPgJsonColumns(): void {
+    if (this.hasPgJsonColumn) {
+      throw new Error(
+        'Pg JSON/JSONB columns are not supported in DuckDB. Replace them with duckDbJson() to use DuckDB’s native JSON type.'
+      );
+    }
+  }
 
   override async migrate(
     migrations: MigrationMeta[],
@@ -108,7 +117,8 @@ export class DuckDBDialect extends PgDialect {
     encoder: DriverValueEncoder<unknown, unknown>
   ): QueryTypingsValue {
     if (is(encoder, PgJsonb) || is(encoder, PgJson)) {
-      throw new Error('JSON and JSONB types are not supported in DuckDB');
+      this.hasPgJsonColumn = true;
+      return 'none';
     } else if (is(encoder, PgNumeric)) {
       return 'decimal';
     } else if (is(encoder, PgTime)) {
