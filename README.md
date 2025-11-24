@@ -59,6 +59,13 @@ connection.closeSync();
 
 Use `migrate(db, './path/to/migrations')` (or pass the full `MigrationConfig`) to apply SQL files. Migration metadata lives in the `drizzle.__drizzle_migrations` table by default with a schema-local sequence named `__drizzle_migrations_id_seq`; custom `migrationsSchema`/`migrationsTable` values get their own scoped sequence as well.
 
+## Introspection (DuckDB)
+
+- Generate schema code straight from DuckDB: `bun x duckdb-introspect --url ':memory:' --schema my_schema --out ./drizzle/schema.ts`.
+- Defaults target DuckDB helpers (e.g., `duckDbTimestamp`, `duckDbJson`, `duckDbStruct`, `duckDbList`) and avoid Postgres JSON/JSONB.
+- Pass `--use-pg-time` to emit pg-core `timestamp/date/time` builders instead of the DuckDB-specific variants.
+- MotherDuck URLs (`md:`) pick up `MOTHERDUCK_TOKEN` automatically when present; views stay excluded unless you pass `--include-views`.
+
 ## Custom column helpers (experimental)
 
 The package ships a few DuckDB-oriented helpers in `columns.ts`:
