@@ -294,9 +294,12 @@ export const duckDbTimestamp = (
       }
       const stringValue =
         typeof value === 'string' ? value : value.toString();
-      const normalized = !stringValue.endsWith('Z')
-        ? `${stringValue.replace(' ', 'T')}Z`
-        : stringValue;
+      const hasOffset =
+        stringValue.endsWith('Z') ||
+        /[+-]\d{2}:?\d{2}$/.test(stringValue);
+      const normalized = hasOffset
+        ? stringValue.replace(' ', 'T')
+        : `${stringValue.replace(' ', 'T')}Z`;
       return new Date(normalized);
     },
   })(name);

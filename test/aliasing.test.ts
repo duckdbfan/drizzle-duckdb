@@ -98,3 +98,14 @@ test('nested selections alias deeply without collisions', async () => {
     },
   ]);
 });
+
+test('duplicate column aliases preserve ordering', async () => {
+  const rows = await ctx.db
+    .select({
+      first: sql<number>`1`.as('dup'),
+      second: sql<number>`2`.as('dup'),
+    })
+    .from(sql`(select 1) as t`);
+
+  expect(rows).toEqual([{ first: 1, second: 2 }]);
+});

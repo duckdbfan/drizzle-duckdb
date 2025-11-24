@@ -222,23 +222,14 @@ export class DuckDBTransaction<
     transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
   ): Promise<T> {
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
-
-    const savepointName = `sp${this.nestedIndex + 1}`;
-    const tx = new DuckDBTransaction<TFullSchema, TSchema>(
+    const nestedTx = new DuckDBTransaction<TFullSchema, TSchema>(
       (this as unknown as Tx).dialect,
       (this as unknown as Tx).session,
       this.schema,
       this.nestedIndex + 1
     );
-    await tx.execute(sql.raw(`savepoint ${savepointName}`));
-    try {
-      const result = await transaction(tx);
-      await tx.execute(sql.raw(`release savepoint ${savepointName}`));
-      return result;
-    } catch (err) {
-      await tx.execute(sql.raw(`rollback to savepoint ${savepointName}`));
-      throw err;
-    }
+
+    return transaction(nestedTx);
   }
 }
 

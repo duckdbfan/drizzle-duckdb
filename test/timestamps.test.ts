@@ -85,6 +85,27 @@ test('timestamp with timezone maps to Date when mode=date', async () => {
   expect(tsWithTz.getTime()).toBe(value.getTime());
 });
 
+test('timestamp with timezone parses offset strings', async () => {
+  const value = '2024-03-01 05:06:07-0500';
+
+  await ctx.db.insert(timestampsTable).values({
+    id: 4,
+    label: 'with-offset',
+    tsWithTz: value,
+  });
+
+  const rows = await ctx.db
+    .select({ tsWithTz: timestampsTable.tsWithTz })
+    .from(timestampsTable)
+    .where(eq(timestampsTable.id, 4));
+
+  const ts = rows[0]?.tsWithTz;
+  expect(ts).toBeInstanceOf(Date);
+  if (ts instanceof Date) {
+    expect(ts.getTime()).toBe(new Date('2024-03-01T10:06:07Z').getTime());
+  }
+});
+
 test('timestamp without timezone maps to string when mode=string', async () => {
   await ctx.db.insert(timestampsTable).values({
     id: 2,

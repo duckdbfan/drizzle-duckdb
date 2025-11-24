@@ -93,8 +93,12 @@ function normalizeTimestamp(value: unknown, withTimezone: boolean): Date | unkno
     return value;
   }
   if (typeof value === 'string') {
-    const normalized = withTimezone ? value : `${value}+00`;
-    return new Date(normalized.replace(' ', 'T'));
+    const hasOffset =
+      value.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(value.trim());
+    const spaced = value.replace(' ', 'T');
+    const normalized =
+      withTimezone || hasOffset ? spaced : `${spaced}+00`;
+    return new Date(normalized);
   }
   return value;
 }

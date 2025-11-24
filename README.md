@@ -77,9 +77,9 @@ They rely on DuckDB-native literals rather than Postgres operators. If you want 
 
 This connector is not “full fidelity” with Drizzle’s Postgres driver. Notable partial areas:
 
-- **Date/time handling:** The full timestamp/time/date mode matrix (`string` vs `date`, with/without timezone, precision) still follows DuckDB defaults; the upstream parity matrix remains skipped.
-- **Result aliasing:** DuckDB’s output naming can still collide in especially gnarly subqueries; `queryAdapter` remains unused.
-- **Transactions:** Nested transactions with savepoints are still skipped in the upstream suite; DuckDB semantics differ slightly from Postgres. JSON/JSONB columns stay unsupported.
+- **Date/time handling:** The full timestamp/time/date mode matrix (`string` vs `date`, with/without timezone, precision) still follows DuckDB defaults, but offset strings now normalize correctly in both string and Date modes.
+- **Result aliasing:** Node API results now keep duplicate column aliases in order (to avoid collisions during deep selections); the `duckdb-async` driver still returns plain objects, so collisions there can still overwrite fields.
+- **Transactions:** Nested `transaction` calls reuse the outer transaction context (DuckDB doesn’t support `SAVEPOINT`), so inner rollbacks abort the whole transaction. JSON/JSONB columns stay unsupported.
 - **Runtime ergonomics:** No statement caching/streaming; results are materialized as objects. Map/struct helpers keep minimal validation.
 
 The suite under `test/` documents the remaining divergences; contributions to close them are welcome.

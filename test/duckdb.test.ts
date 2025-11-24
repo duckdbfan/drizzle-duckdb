@@ -3160,7 +3160,6 @@ test('transaction rollback', async () => {
   await db.execute(sql`drop table ${users}`);
 });
 
-// nested transactions/savepoints not supported I guess todo: throw an error
 test('nested transaction', async () => {
 	const { db } = ctx;
 
@@ -3175,15 +3174,16 @@ test('nested transaction', async () => {
 		sql`create table buplic.users_nested_transactions (id integer not null primary key, balance integer not null)`,
 	);
 
-	await expect(
-		db.transaction(async (tx) => {
-			await tx.insert(users).values({ id: 1, balance: 100 });
+	await db.transaction(async (tx) => {
+		await tx.insert(users).values({ id: 1, balance: 100 });
 
-			await tx.transaction(async (tx) => {
-				await tx.update(users).set({ id: 1, balance: 200 });
-			});
-		}),
-	).rejects.toThrowError(/savepoint|SAVEPOINT|nested/i);
+		await tx.transaction(async (tx) => {
+			await tx.update(users).set({ id: 1, balance: 200 });
+		});
+	});
+
+	const rows = await db.select().from(users);
+	assert.deepEqual(rows, [{ id: 1, balance: 200 }]);
 
 	await db.execute(sql`drop table ${users}`);
 });
@@ -3211,7 +3211,10 @@ test('nested transaction rollback', async () => {
 				tx.rollback();
 			});
 		}),
-	).rejects.toThrowError(/savepoint|SAVEPOINT|nested/i);
+	).rejects.toThrowError(TransactionRollbackError);
+
+	const rows = await db.select().from(users);
+	assert.deepEqual(rows, []);
 
 	await db.execute(sql`drop table ${users}`);
 });
