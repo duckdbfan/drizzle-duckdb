@@ -8,6 +8,8 @@ import { introspect } from '../introspect.ts';
 
 interface CliOptions {
   url?: string;
+  database?: string;
+  allDatabases: boolean;
   schemas?: string[];
   outFile: string;
   includeViews: boolean;
@@ -18,6 +20,7 @@ interface CliOptions {
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     outFile: path.resolve(process.cwd(), 'drizzle/schema.ts'),
+    allDatabases: false,
     includeViews: false,
     useCustomTimeTypes: true,
   };
@@ -27,6 +30,13 @@ function parseArgs(argv: string[]): CliOptions {
     switch (arg) {
       case '--url':
         options.url = argv[++i];
+        break;
+      case '--database':
+      case '--db':
+        options.database = argv[++i];
+        break;
+      case '--all-databases':
+        options.allDatabases = true;
         break;
       case '--schema':
       case '--schemas':
@@ -68,11 +78,27 @@ Usage:
 
 Options:
   --url            DuckDB database path (e.g. :memory:, ./local.duckdb, md:)
+  --database, --db Database/catalog to introspect (default: current database)
+  --all-databases  Introspect all attached databases (not just current)
   --schema         Comma separated schema list (defaults to all non-system schemas)
   --out            Output file (default: ./drizzle/schema.ts)
   --include-views  Include views in the generated schema
   --use-pg-time    Use pg-core timestamp/date/time instead of DuckDB custom helpers
   --import-base    Override import path for duckdb helpers (default: package name)
+
+Database Filtering:
+  By default, only tables from the current database are introspected. This prevents
+  returning tables from all attached databases in MotherDuck workspaces.
+
+  Use --database to specify a different database, or --all-databases to introspect
+  all attached databases.
+
+Examples:
+  # Local DuckDB file
+  bun x duckdb-introspect --url ./my-database.duckdb --out ./schema.ts
+
+  # MotherDuck (requires MOTHERDUCK_TOKEN env var)
+  MOTHERDUCK_TOKEN=xxx bun x duckdb-introspect --url md: --database my_cloud_db --out ./schema.ts
 `);
 }
 
@@ -94,6 +120,8 @@ async function main() {
 
   try {
     const result = await introspect(db, {
+      database: options.database,
+      allDatabases: options.allDatabases,
       schemas: options.schemas,
       includeViews: options.includeViews,
       useCustomTimeTypes: options.useCustomTimeTypes,

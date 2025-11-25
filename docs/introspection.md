@@ -13,6 +13,8 @@ bunx duckdb-introspect --url ./my-database.duckdb --out ./drizzle/schema.ts
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--url` | DuckDB database path (`:memory:`, `./file.duckdb`, `md:`) | Required |
+| `--database`, `--db` | Database/catalog to introspect | Current database |
+| `--all-databases` | Introspect all attached databases | `false` |
 | `--schema` | Comma-separated schema names to introspect | All non-system schemas |
 | `--out` | Output file path | `./drizzle/schema.ts` |
 | `--include-views` | Include views in generated schema | `false` |
@@ -38,10 +40,43 @@ bunx duckdb-introspect --url ./db.duckdb --include-views --out ./schema.ts
 
 **MotherDuck:**
 ```bash
-MOTHERDUCK_TOKEN=your_token bunx duckdb-introspect --url md: --schema my_db --out ./schema.ts
+MOTHERDUCK_TOKEN=your_token bunx duckdb-introspect --url md: --database my_cloud_db --out ./schema.ts
 ```
 
 The CLI automatically uses `MOTHERDUCK_TOKEN` from the environment for `md:` URLs.
+
+## Database Filtering
+
+By default, introspection only returns tables from the **current database**. This prevents accidentally including tables from all attached databases in MotherDuck workspaces.
+
+### Default Behavior
+
+When you connect to DuckDB or MotherDuck, the introspector uses `SELECT current_database()` to determine which database to introspect. This means:
+
+- **Local DuckDB**: Introspects tables in the connected database file
+- **MotherDuck**: Introspects only your current database, not shared databases like `sample_data`
+
+### Specifying a Database
+
+Use `--database` (or `--db`) to introspect a specific database:
+
+```bash
+# Introspect a specific MotherDuck database
+MOTHERDUCK_TOKEN=xxx bunx duckdb-introspect --url md: --database my_analytics_db --out ./schema.ts
+
+# Introspect a specific database with schema filter
+MOTHERDUCK_TOKEN=xxx bunx duckdb-introspect --url md: --database my_db --schema main,public --out ./schema.ts
+```
+
+### Introspecting All Databases
+
+Use `--all-databases` to introspect tables from all attached databases (use with caution):
+
+```bash
+bunx duckdb-introspect --url md: --all-databases --out ./schema.ts
+```
+
+This is useful when you intentionally want to generate schemas for multiple databases, but be aware that this may include shared databases and sample data.
 
 ## Programmatic API
 
@@ -67,6 +102,14 @@ connection.closeSync();
 
 ```typescript
 interface IntrospectOptions {
+  // Database/catalog to introspect (default: current database via current_database())
+  // This prevents returning tables from all attached databases in MotherDuck
+  database?: string;
+
+  // When true, introspects all attached databases (default: false)
+  // Ignored if `database` is explicitly set
+  allDatabases?: boolean;
+
   // Schemas to introspect (default: all non-system schemas)
   schemas?: string[];
 
@@ -82,6 +125,24 @@ interface IntrospectOptions {
   // Custom import path for helpers (default: package name)
   importBasePath?: string;
 }
+```
+
+### Programmatic Database Filtering
+
+```typescript
+// Default: introspect current database only
+const result = await introspect(db);
+
+// Specific database
+const result = await introspect(db, {
+  database: 'my_analytics_db',
+  schemas: ['main'],
+});
+
+// All databases (use with caution)
+const result = await introspect(db, {
+  allDatabases: true,
+});
 ```
 
 ### Return Value

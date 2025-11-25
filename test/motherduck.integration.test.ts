@@ -3,6 +3,7 @@ import type { DuckDBConnection } from '@duckdb/node-api';
 import { sql } from 'drizzle-orm';
 import { doublePrecision, integer, pgTable, timestamp } from 'drizzle-orm/pg-core';
 import { drizzle } from '../src';
+import { introspect } from '../src/introspect';
 import { expect, test } from 'vitest';
 
 const motherduckToken = process.env.MOTHERDUCK_TOKEN;
@@ -76,6 +77,41 @@ if (!motherduckToken) {
             Number(tipByPassengers[i].avgTip)
           );
         }
+      } finally {
+        connection.closeSync();
+        instance.closeSync();
+      }
+    },
+    120_000
+  );
+
+  test(
+    'introspection filters to current database and excludes sample_data tables',
+    async () => {
+      const instance = await DuckDBInstance.create('md:', { motherduck_token: motherduckToken });
+      const connection: DuckDBConnection = await instance.connect();
+      const db = drizzle(connection);
+
+      try {
+        // Get the current database name
+        const dbRows = await db.execute<{ current_database: string }>(
+          sql`SELECT current_database() as current_database`
+        );
+        const currentDatabase = dbRows[0]?.current_database;
+        expect(currentDatabase).toBeDefined();
+
+        // Run introspection with default settings (should filter to current database)
+        const result = await introspect(db, {
+          schemas: ['main'],
+        });
+
+        // Verify that tables from sample_data.nyc are NOT included
+        const tableNames = result.files.metaJson.map((t) => t.name);
+        expect(tableNames).not.toContain('taxi');
+        expect(tableNames).not.toContain('weather');
+
+        // The generated schema should not reference sample_data
+        expect(result.files.schemaTs).not.toContain('sample_data');
       } finally {
         connection.closeSync();
         instance.closeSync();

@@ -5,6 +5,18 @@ import type { DuckDBDatabase } from './driver.ts';
 const SYSTEM_SCHEMAS = new Set(['information_schema', 'pg_catalog']);
 
 export interface IntrospectOptions {
+  /**
+   * Database/catalog to introspect. If not specified, uses the current database
+   * (via `SELECT current_database()`). This prevents returning tables from all
+   * attached databases in MotherDuck workspaces.
+   */
+  database?: string;
+  /**
+   * When true, introspects all attached databases instead of just the current one.
+   * Ignored if `database` is explicitly set.
+   * @default false
+   */
+  allDatabases?: boolean;
   schemas?: string[];
   includeViews?: boolean;
   useCustomTimeTypes?: boolean;
@@ -102,13 +114,14 @@ export async function introspect(
   db: DuckDBDatabase,
   opts: IntrospectOptions = {}
 ): Promise<IntrospectResult> {
-  const schemas = await resolveSchemas(db, opts.schemas);
+  const database = await resolveDatabase(db, opts.database, opts.allDatabases);
+  const schemas = await resolveSchemas(db, database, opts.schemas);
   const includeViews = opts.includeViews ?? false;
 
-  const tables = await loadTables(db, schemas, includeViews);
-  const columns = await loadColumns(db, schemas);
-  const constraints = await loadConstraints(db, schemas);
-  const indexes = await loadIndexes(db, schemas);
+  const tables = await loadTables(db, database, schemas, includeViews);
+  const columns = await loadColumns(db, database, schemas);
+  const constraints = await loadConstraints(db, database, schemas);
+  const indexes = await loadIndexes(db, database, schemas);
 
   const grouped = buildTables(tables, columns, constraints, indexes);
 
@@ -126,16 +139,39 @@ export async function introspect(
   };
 }
 
+async function resolveDatabase(
+  db: DuckDBDatabase,
+  targetDatabase?: string,
+  allDatabases?: boolean
+): Promise<string | null> {
+  if (allDatabases) {
+    return null;
+  }
+  if (targetDatabase) {
+    return targetDatabase;
+  }
+
+  const rows = await db.execute<{ current_database: string }>(
+    sql`SELECT current_database() as current_database`
+  );
+  return rows[0]?.current_database ?? null;
+}
+
 async function resolveSchemas(
   db: DuckDBDatabase,
+  database: string | null,
   targetSchemas?: string[]
 ): Promise<string[]> {
   if (targetSchemas?.length) {
     return targetSchemas;
   }
 
+  const databaseFilter = database
+    ? sql`catalog_name = ${database}`
+    : sql`1 = 1`;
+
   const rows = await db.execute<{ schema_name: string }>(
-    sql`select schema_name from information_schema.schemata`
+    sql`SELECT schema_name FROM information_schema.schemata WHERE ${databaseFilter}`
   );
 
   return rows
@@ -145,30 +181,40 @@ async function resolveSchemas(
 
 async function loadTables(
   db: DuckDBDatabase,
+  database: string | null,
   schemas: string[],
   includeViews: boolean
 ): Promise<DuckDbTableRow[]> {
   const schemaFragments = schemas.map((schema) => sql`${schema}`);
+  const databaseFilter = database
+    ? sql`table_catalog = ${database}`
+    : sql`1 = 1`;
 
   return await db.execute<DuckDbTableRow>(
     sql`
-      select table_schema as schema_name, table_name, table_type
-      from information_schema.tables
-      where table_schema in (${sql.join(schemaFragments, sql.raw(', '))})
-      and ${includeViews ? sql`1 = 1` : sql`table_type = 'BASE TABLE'`}
-      order by table_schema, table_name
+      SELECT table_schema as schema_name, table_name, table_type
+      FROM information_schema.tables
+      WHERE ${databaseFilter}
+      AND table_schema IN (${sql.join(schemaFragments, sql.raw(', '))})
+      AND ${includeViews ? sql`1 = 1` : sql`table_type = 'BASE TABLE'`}
+      ORDER BY table_schema, table_name
     `
   );
 }
 
 async function loadColumns(
   db: DuckDBDatabase,
+  database: string | null,
   schemas: string[]
 ): Promise<DuckDbColumnRow[]> {
   const schemaFragments = schemas.map((schema) => sql`${schema}`);
+  const databaseFilter = database
+    ? sql`database_name = ${database}`
+    : sql`1 = 1`;
+
   return await db.execute<DuckDbColumnRow>(
     sql`
-      select
+      SELECT
         schema_name,
         table_name,
         column_name,
@@ -180,21 +226,27 @@ async function loadColumns(
         numeric_precision,
         numeric_scale,
         internal
-      from duckdb_columns()
-      where schema_name in (${sql.join(schemaFragments, sql.raw(', '))})
-      order by schema_name, table_name, column_index
+      FROM duckdb_columns()
+      WHERE ${databaseFilter}
+      AND schema_name IN (${sql.join(schemaFragments, sql.raw(', '))})
+      ORDER BY schema_name, table_name, column_index
     `
   );
 }
 
 async function loadConstraints(
   db: DuckDBDatabase,
+  database: string | null,
   schemas: string[]
 ): Promise<DuckDbConstraintRow[]> {
   const schemaFragments = schemas.map((schema) => sql`${schema}`);
+  const databaseFilter = database
+    ? sql`database_name = ${database}`
+    : sql`1 = 1`;
+
   return await db.execute<DuckDbConstraintRow>(
     sql`
-      select
+      SELECT
         schema_name,
         table_name,
         constraint_name,
@@ -203,29 +255,36 @@ async function loadConstraints(
         constraint_column_names,
         referenced_table,
         referenced_column_names
-      from duckdb_constraints()
-      where schema_name in (${sql.join(schemaFragments, sql.raw(', '))})
-      order by schema_name, table_name, constraint_index
+      FROM duckdb_constraints()
+      WHERE ${databaseFilter}
+      AND schema_name IN (${sql.join(schemaFragments, sql.raw(', '))})
+      ORDER BY schema_name, table_name, constraint_index
     `
   );
 }
 
 async function loadIndexes(
   db: DuckDBDatabase,
+  database: string | null,
   schemas: string[]
 ): Promise<DuckDbIndexRow[]> {
   const schemaFragments = schemas.map((schema) => sql`${schema}`);
+  const databaseFilter = database
+    ? sql`database_name = ${database}`
+    : sql`1 = 1`;
+
   return await db.execute<DuckDbIndexRow>(
     sql`
-      select
+      SELECT
         schema_name,
         table_name,
         index_name,
         is_unique,
         expressions
-      from duckdb_indexes()
-      where schema_name in (${sql.join(schemaFragments, sql.raw(', '))})
-      order by schema_name, table_name, index_name
+      FROM duckdb_indexes()
+      WHERE ${databaseFilter}
+      AND schema_name IN (${sql.join(schemaFragments, sql.raw(', '))})
+      ORDER BY schema_name, table_name, index_name
     `
   );
 }
