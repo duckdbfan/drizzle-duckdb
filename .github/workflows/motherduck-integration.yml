@@ -1,7 +1,7 @@
 name: MotherDuck Integration
 
 on:
-  workflow_dispatch:
+  pull_request:
 
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
 
       - name: Seed MotherDuck CI schema
         run: |
-          bun <<'EOF'
+          bun - <<'EOF'
           import { DuckDBInstance } from '@duckdb/node-api';
 
           const token = process.env.MOTHERDUCK_TOKEN;
@@ -51,12 +51,13 @@ jobs:
             union all select 2 as order_id, 2 as customer_id, 50.25 as total;
           `);
 
-          await connection.close();
+          connection.closeSync();
           instance.closeSync();
           EOF
 
       - name: Introspect seeded schema
         run: |
+          mkdir -p /tmp/motherduck
           bun ./dist/duckdb-introspect.mjs --url md: --schemas ci_extension --out /tmp/motherduck/schema.ts
           test -s /tmp/motherduck/schema.ts
           grep -q "ci_contacts" /tmp/motherduck/schema.ts
@@ -67,7 +68,7 @@ jobs:
 
       - name: Complex join & aggregation smoke test
         run: |
-          bun <<'EOF'
+          bun - <<'EOF'
           import { DuckDBInstance } from '@duckdb/node-api';
           import { drizzle } from './dist/index.mjs';
           import { sql } from 'drizzle-orm';
@@ -98,6 +99,6 @@ jobs:
             throw new Error(`Unexpected join row count: ${joinResults.length}`);
           }
 
-          await connection.close();
+          connection.closeSync();
           instance.closeSync();
           EOF

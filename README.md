@@ -1,116 +1,354 @@
-# drizzle-neo-duckdb
+<div align="center">
 
-DuckDB dialect glue for [drizzle-orm](https://orm.drizzle.team/), built on the Postgres driver surface but targeting DuckDB. Published from the `@leonardovida-md` scope with a focus on getting Drizzle’s query builder, migrations, and type inference working against DuckDB’s Node runtime.
+# Drizzle DuckDB
 
-- **Runtime target:** `@duckdb/node-api@1.4.2-r.1` (DuckDB Node API only).
-- **Module format:** ESM only, `moduleResolution: bundler`, explicit `.ts` extensions in source.
-- **Status:** Experimental; feature coverage is still growing and several DuckDB-specific types/behaviors are missing (see below).
+### DuckDB dialect for [Drizzle ORM](https://orm.drizzle.team/)
+
+[![npm version](https://img.shields.io/npm/v/@leonardovida-md/drizzle-neo-duckdb)](https://www.npmjs.com/package/@leonardovida-md/drizzle-neo-duckdb)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+[Documentation](./docs) • [Examples](./example) • [Contributing](#contributing)
+
+</div>
+
+<br>
+
+**Drizzle DuckDB** brings [Drizzle ORM](https://orm.drizzle.team/) to [DuckDB](https://duckdb.org/) — the fast in-process analytical database. Get Drizzle's type-safe query builder, automatic migrations, and full TypeScript inference while working with DuckDB's powerful analytics engine.
+
+Works with local DuckDB files, in-memory databases, and [MotherDuck](https://motherduck.com/) cloud.
+
+> **Status:** Experimental. Core query building, migrations, and type inference work well. Some DuckDB-specific types and edge cases are still being refined.
 
 ## Installation
 
-```sh
-bun add @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api@1.4.2-r.1
+```bash
+bun add @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api
 ```
 
-## Quick start (Node API)
+```bash
+npm install @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api
+```
 
-```ts
+```bash
+pnpm add @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api
+```
+
+## Quick Start
+
+```typescript
 import { DuckDBInstance } from '@duckdb/node-api';
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
-import { DefaultLogger, sql } from 'drizzle-orm';
-import { char, integer, pgSchema, text } from 'drizzle-orm/pg-core';
+import { integer, text, pgTable } from 'drizzle-orm/pg-core';
 
+// Connect to DuckDB
 const instance = await DuckDBInstance.create(':memory:');
 const connection = await instance.connect();
-const db = drizzle(connection, { logger: new DefaultLogger() });
+const db = drizzle(connection);
 
-const customSchema = pgSchema('custom');
-
-await db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${customSchema}`);
-await db.execute(sql`CREATE SEQUENCE IF NOT EXISTS serial_cities;`);
-
-const cities = customSchema.table('cities', {
-  id: integer('id').primaryKey().default(sql`nextval('serial_cities')`),
+// Define your schema
+const users = pgTable('users', {
+  id: integer('id').primaryKey(),
   name: text('name').notNull(),
-  state: char('state', { length: 2 }),
+  email: text('email').notNull(),
 });
 
+// Create table
 await db.execute(sql`
-  create table if not exists ${cities} (
-    id integer primary key default nextval('serial_cities'),
-    name text not null,
-    state char(2)
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL
   )
 `);
 
-const inserted = await db
-  .insert(cities)
-  .values([
-    { name: 'Paris', state: 'FR' },
-    { name: 'London', state: 'UK' },
-  ])
-  .returning({ id: cities.id });
+// Insert data
+await db.insert(users).values([
+  { id: 1, name: 'Alice', email: 'alice@example.com' },
+  { id: 2, name: 'Bob', email: 'bob@example.com' },
+]);
 
-console.log(inserted);
+// Query with full type safety
+const allUsers = await db.select().from(users);
+//    ^? { id: number; name: string; email: string }[]
+
+// Clean up
 connection.closeSync();
 ```
 
+## Connecting to DuckDB
+
+### In-Memory Database
+
+```typescript
+const instance = await DuckDBInstance.create(':memory:');
+const connection = await instance.connect();
+const db = drizzle(connection);
+```
+
+### Local File
+
+```typescript
+const instance = await DuckDBInstance.create('./my-database.duckdb');
+const connection = await instance.connect();
+const db = drizzle(connection);
+```
+
+### MotherDuck Cloud
+
+```typescript
+const instance = await DuckDBInstance.create('md:', {
+  motherduck_token: process.env.MOTHERDUCK_TOKEN,
+});
+const connection = await instance.connect();
+const db = drizzle(connection);
+```
+
+### With Logging
+
+```typescript
+import { DefaultLogger } from 'drizzle-orm';
+
+const db = drizzle(connection, {
+  logger: new DefaultLogger(),
+});
+```
+
+## Schema Declaration
+
+Drizzle DuckDB uses `drizzle-orm/pg-core` for schema definitions since DuckDB's SQL is largely Postgres-compatible:
+
+```typescript
+import { sql } from 'drizzle-orm';
+import { integer, text, boolean, timestamp, pgTable, pgSchema } from 'drizzle-orm/pg-core';
+
+// Tables in default schema
+const posts = pgTable('posts', {
+  id: integer('id').primaryKey(),
+  title: text('title').notNull(),
+  published: boolean('published').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Tables in custom schema
+const analytics = pgSchema('analytics');
+
+const events = analytics.table('events', {
+  id: integer('id').primaryKey(),
+  name: text('name').notNull(),
+  timestamp: timestamp('timestamp').defaultNow(),
+});
+```
+
+## DuckDB-Specific Column Types
+
+For DuckDB-specific types like `STRUCT`, `MAP`, `LIST`, and proper timestamp handling, use the custom column helpers:
+
+```typescript
+import {
+  duckDbList,
+  duckDbArray,
+  duckDbStruct,
+  duckDbMap,
+  duckDbJson,
+  duckDbTimestamp,
+  duckDbDate,
+  duckDbTime,
+} from '@leonardovida-md/drizzle-neo-duckdb';
+
+const products = pgTable('products', {
+  id: integer('id').primaryKey(),
+
+  // LIST type (variable length)
+  tags: duckDbList('tags', 'TEXT'),
+
+  // ARRAY type (fixed length)
+  coordinates: duckDbArray('coordinates', 'DOUBLE', 3),
+
+  // STRUCT type
+  metadata: duckDbStruct('metadata', {
+    version: 'INTEGER',
+    author: 'TEXT',
+  }),
+
+  // MAP type
+  attributes: duckDbMap('attributes', 'TEXT'),
+
+  // JSON type (use this instead of pg json/jsonb)
+  config: duckDbJson('config'),
+
+  // Timestamp with proper DuckDB handling
+  createdAt: duckDbTimestamp('created_at', { withTimezone: true }),
+});
+```
+
+See [Column Types Documentation](./docs/columns.md) for complete reference.
+
+## Querying
+
+All standard Drizzle query methods work:
+
+```typescript
+// Select
+const users = await db.select().from(usersTable).where(eq(usersTable.active, true));
+
+// Insert
+await db.insert(usersTable).values({ name: 'Alice', email: 'alice@example.com' });
+
+// Insert with returning
+const inserted = await db
+  .insert(usersTable)
+  .values({ name: 'Bob' })
+  .returning({ id: usersTable.id });
+
+// Update
+await db.update(usersTable).set({ name: 'Updated' }).where(eq(usersTable.id, 1));
+
+// Delete
+await db.delete(usersTable).where(eq(usersTable.id, 1));
+```
+
+### Array Operations
+
+For DuckDB array operations, use the custom helpers instead of Postgres operators:
+
+```typescript
+import {
+  duckDbArrayContains,
+  duckDbArrayContained,
+  duckDbArrayOverlaps,
+} from '@leonardovida-md/drizzle-neo-duckdb';
+
+// Check if array contains all values
+const results = await db
+  .select()
+  .from(products)
+  .where(duckDbArrayContains(products.tags, ['electronics', 'sale']));
+
+// Check if array is contained by values
+const results = await db
+  .select()
+  .from(products)
+  .where(duckDbArrayContained(products.tags, ['electronics', 'sale', 'featured']));
+
+// Check if arrays overlap
+const results = await db
+  .select()
+  .from(products)
+  .where(duckDbArrayOverlaps(products.tags, ['electronics', 'books']));
+```
+
+## Transactions
+
+```typescript
+await db.transaction(async (tx) => {
+  await tx.insert(accounts).values({ balance: 100 });
+  await tx.update(accounts).set({ balance: 50 }).where(eq(accounts.id, 1));
+});
+```
+
+> **Note:** DuckDB doesn't support `SAVEPOINT`, so nested transactions reuse the outer transaction context. Inner rollbacks will abort the entire transaction.
+
 ## Migrations
 
-Use `migrate(db, './path/to/migrations')` (or pass the full `MigrationConfig`) to apply SQL files. Migration metadata lives in the `drizzle.__drizzle_migrations` table by default with a schema-local sequence named `__drizzle_migrations_id_seq`; custom `migrationsSchema`/`migrationsTable` values get their own scoped sequence as well.
+Apply SQL migration files using the `migrate` function:
 
-## Custom column helpers (experimental)
+```typescript
+import { migrate } from '@leonardovida-md/drizzle-neo-duckdb';
 
-The package ships a few DuckDB-oriented helpers in `columns.ts`:
+await migrate(db, { migrationsFolder: './drizzle' });
+```
 
-- `duckDbStruct`, `duckDbMap` for `STRUCT`/`MAP`.
-- `duckDbList`, `duckDbArray` for DuckDB list/array columns (uses native list semantics).
-- `duckDbTimestamp`, `duckDbDate`, `duckDbTime` for timestamp/date/time handling.
-- `duckDbBlob`, `duckDbInet`, `duckDbInterval` for binary, inet, and interval support.
-- `duckDbArrayContains/Contained/Overlaps` expression helpers backed by DuckDB’s `array_has_*` functions.
+Migration metadata is stored in `drizzle.__drizzle_migrations` by default. See [Migrations Documentation](./docs/migrations.md) for configuration options.
 
-They rely on DuckDB-native literals rather than Postgres operators. If you want to avoid Postgres array operators (`@>`, `<@`, `&&`), import these helpers from `@leonardovida-md/drizzle-neo-duckdb`.
+## Schema Introspection
 
-## Introspection (DuckDB)
+Generate Drizzle schema from an existing DuckDB database:
 
-- CLI: `bun x duckdb-introspect --url ':memory:' --schema my_schema --out ./drizzle/schema.ts`
-  - Options: `--schema a,b` (defaults to all non-system schemas), `--include-views`, `--use-pg-time` (emit pg-core date/time/timestamp), `--import-base <path>` to override the helper import path.
-  - MotherDuck URLs (`md:`) pick up `MOTHERDUCK_TOKEN` automatically; views are skipped unless `--include-views` is set.
-- Programmatic: `const { files } = await introspect(db, { schemas: ['my_schema'] });` — `files.schemaTs` contains Drizzle pg-core + DuckDB helper definitions (lists/arrays/struct/map/json, inet/interval/blob, custom timestamps).
-- JSON always maps to `duckDbJson` (never Pg JSON/JSONB); timestamps default to `duckDbTimestamp/Date/Time` to match this dialect’s normalization.
+### CLI
 
-## Known gaps and behavior differences
+```bash
+bunx duckdb-introspect --url ./my-database.duckdb --out ./drizzle/schema.ts
+```
 
-This connector is not “full fidelity” with Drizzle’s Postgres driver. Notable partial areas:
+### Programmatic
 
-- **Date/time handling:** The full timestamp/time/date mode matrix (`string` vs `date`, with/without timezone, precision) still follows DuckDB defaults, but offset strings now normalize correctly in both string and Date modes.
-- **Result aliasing:** Node API results keep duplicate column aliases in order and suffix repeats to avoid collisions during deep selections.
-- **Transactions:** Nested `transaction` calls reuse the outer transaction context (DuckDB doesn’t support `SAVEPOINT`), so inner rollbacks abort the whole transaction. JSON/JSONB columns stay unsupported.
-- **Runtime ergonomics:** No statement caching/streaming; results are materialized as objects. Map/struct helpers keep minimal validation.
+```typescript
+import { introspect } from '@leonardovida-md/drizzle-neo-duckdb';
 
-The suite under `test/` documents the remaining divergences; contributions to close them are welcome.
+const result = await introspect(db, {
+  schemas: ['public', 'analytics'],
+  includeViews: true,
+});
 
-## Developing
+console.log(result.files.schemaTs);
+```
 
-- Install: `bun install`
-- Run tests: `bun test`
-- Build bundles and types: `bun run build` (emits `dist/index.mjs` and `dist/index.d.ts`)
-- Publish to npm: `bun run build` then `npm publish` (ESM-only entry point via `exports` map)
+See [Introspection Documentation](./docs/introspection.md) for all options.
 
-Source lives in `src/*.ts`; generated artifacts in `dist/` should never be edited by hand.
+## Configuration Options
 
-## Contributing
+```typescript
+const db = drizzle(connection, {
+  // Enable query logging
+  logger: new DefaultLogger(),
 
-Pull requests are welcome. Please include:
+  // Rewrite Postgres array operators to DuckDB functions (default: true)
+  rewriteArrays: true,
 
-- A short, imperative commit/PR title.
-- Failing/repro tests where possible (`test/<feature>.test.ts` is preferred over modifying the big `duckdb.test.ts` unless necessary).
-- Notes on DuckDB-specific quirks or limitations you encountered.
+  // Throw on Postgres-style array literals like '{1,2,3}' (default: false)
+  rejectStringArrayLiterals: false,
+
+  // Pass your schema for relational queries
+  schema: mySchema,
+});
+```
+
+## Known Limitations
+
+This connector aims for compatibility with Drizzle's Postgres driver but has some differences:
+
+| Feature | Status |
+|---------|--------|
+| Basic CRUD operations | Full support |
+| Joins and subqueries | Full support |
+| Transactions | No savepoints (nested transactions reuse outer) |
+| JSON/JSONB columns | Use `duckDbJson()` instead |
+| Prepared statements | No statement caching |
+| Streaming results | Results are materialized |
+
+See [Limitations Documentation](./docs/limitations.md) for details.
 
 ## Examples
 
-- A minimal MotherDuck + Drizzle script that reads the built-in `sample_database.nyc.taxi` share lives in `example/motherduck-nyc.ts`. Set `MOTHERDUCK_TOKEN` and run `bun example/motherduck-nyc.ts` (see `example/README.md` for details).
+- **[MotherDuck NYC Taxi](./example/motherduck-nyc.ts)** — Query the built-in NYC taxi dataset from MotherDuck cloud
+
+Run examples:
+```bash
+MOTHERDUCK_TOKEN=your_token bun example/motherduck-nyc.ts
+```
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Include tests for new features (`test/<feature>.test.ts`)
+2. Note any DuckDB-specific quirks you encounter
+3. Use a clear, imperative commit message
+
+```bash
+# Install dependencies
+bun install
+
+# Run tests
+bun test
+
+# Run tests with UI
+bun t
+
+# Build
+bun run build
+```
 
 ## License
 
-Apache-2.0
+[Apache-2.0](./LICENSE)

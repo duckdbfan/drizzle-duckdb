@@ -1,0 +1,267 @@
+# Schema Introspection
+
+Generate Drizzle schema definitions from an existing DuckDB database using the introspection CLI or programmatic API.
+
+## CLI Usage
+
+```bash
+bunx duckdb-introspect --url ./my-database.duckdb --out ./drizzle/schema.ts
+```
+
+### Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--url` | DuckDB database path (`:memory:`, `./file.duckdb`, `md:`) | Required |
+| `--schema` | Comma-separated schema names to introspect | All non-system schemas |
+| `--out` | Output file path | `./drizzle/schema.ts` |
+| `--include-views` | Include views in generated schema | `false` |
+| `--use-pg-time` | Use pg-core timestamp/date/time instead of DuckDB helpers | `false` |
+| `--import-base` | Custom import path for DuckDB column helpers | Package name |
+
+### Examples
+
+**Local database:**
+```bash
+bunx duckdb-introspect --url ./analytics.duckdb --out ./src/schema.ts
+```
+
+**Specific schemas:**
+```bash
+bunx duckdb-introspect --url ./db.duckdb --schema public,analytics --out ./schema.ts
+```
+
+**Include views:**
+```bash
+bunx duckdb-introspect --url ./db.duckdb --include-views --out ./schema.ts
+```
+
+**MotherDuck:**
+```bash
+MOTHERDUCK_TOKEN=your_token bunx duckdb-introspect --url md: --schema my_db --out ./schema.ts
+```
+
+The CLI automatically uses `MOTHERDUCK_TOKEN` from the environment for `md:` URLs.
+
+## Programmatic API
+
+```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
+import { drizzle, introspect } from '@leonardovida-md/drizzle-neo-duckdb';
+
+const instance = await DuckDBInstance.create('./my-database.duckdb');
+const connection = await instance.connect();
+const db = drizzle(connection);
+
+const result = await introspect(db, {
+  schemas: ['public', 'analytics'],
+  includeViews: true,
+});
+
+console.log(result.files.schemaTs);
+
+connection.closeSync();
+```
+
+### Options
+
+```typescript
+interface IntrospectOptions {
+  // Schemas to introspect (default: all non-system schemas)
+  schemas?: string[];
+
+  // Include views in output (default: false)
+  includeViews?: boolean;
+
+  // Use DuckDB timestamp helpers instead of pg-core (default: true)
+  useCustomTimeTypes?: boolean;
+
+  // Use duckDbJson for JSON columns (default: true)
+  mapJsonAsDuckDbJson?: boolean;
+
+  // Custom import path for helpers (default: package name)
+  importBasePath?: string;
+}
+```
+
+### Return Value
+
+```typescript
+interface IntrospectResult {
+  files: {
+    // Generated TypeScript schema file content
+    schemaTs: string;
+
+    // Structured metadata about tables, columns, constraints
+    metaJson: IntrospectedTable[];
+  };
+}
+```
+
+## Generated Schema Format
+
+The introspector generates Drizzle schema files with:
+
+1. **Imports** from `drizzle-orm`, `drizzle-orm/pg-core`, and DuckDB helpers
+2. **Schema declarations** for each database schema
+3. **Table definitions** with columns, constraints, and indexes
+
+### Example Output
+
+Given this DuckDB schema:
+
+```sql
+CREATE SCHEMA analytics;
+
+CREATE TABLE analytics.events (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  properties JSON,
+  tags TEXT[],
+  created_at TIMESTAMP DEFAULT current_timestamp
+);
+
+CREATE TABLE analytics.users (
+  id INTEGER PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  metadata STRUCT(plan TEXT, active BOOLEAN)
+);
+```
+
+The introspector generates:
+
+```typescript
+import { sql } from 'drizzle-orm';
+import { integer, pgSchema, text, varchar } from 'drizzle-orm/pg-core';
+import {
+  duckDbJson,
+  duckDbList,
+  duckDbStruct,
+  duckDbTimestamp,
+} from '@leonardovida-md/drizzle-neo-duckdb';
+
+export const analyticsSchema = pgSchema('analytics');
+
+export const events = analyticsSchema.table('events', {
+  id: integer('id').primaryKey(),
+  name: text('name').notNull(),
+  properties: duckDbJson('properties'),
+  tags: duckDbList('tags', 'TEXT'),
+  createdAt: duckDbTimestamp('created_at').defaultNow(),
+});
+
+export const users = analyticsSchema.table('users', {
+  id: integer('id').primaryKey(),
+  email: varchar('email', { length: 255 }).notNull(),
+  metadata: duckDbStruct('metadata', { plan: 'TEXT', active: 'BOOLEAN' }),
+}, (t) => ({
+  emailUnique: t.email.unique('users_email_unique'),
+}));
+```
+
+## Type Mappings
+
+The introspector maps DuckDB types to Drizzle column builders:
+
+### Numeric Types
+
+| DuckDB Type | Drizzle Builder |
+|-------------|-----------------|
+| `TINYINT`, `SMALLINT`, `INT2` | `integer()` |
+| `INTEGER`, `INT`, `INT4` | `integer()` |
+| `BIGINT`, `INT8` | `bigint()` |
+| `REAL`, `FLOAT4` | `real()` |
+| `DOUBLE`, `FLOAT` | `doublePrecision()` |
+| `DECIMAL(p,s)`, `NUMERIC(p,s)` | `numeric()` |
+
+### String Types
+
+| DuckDB Type | Drizzle Builder |
+|-------------|-----------------|
+| `TEXT`, `STRING` | `text()` |
+| `VARCHAR(n)` | `varchar({ length: n })` |
+| `CHAR(n)` | `char({ length: n })` |
+
+### Date/Time Types
+
+| DuckDB Type | Drizzle Builder |
+|-------------|-----------------|
+| `TIMESTAMP` | `duckDbTimestamp()` or `timestamp()` |
+| `TIMESTAMP WITH TIME ZONE` | `duckDbTimestamp({ withTimezone: true })` |
+| `DATE` | `duckDbDate()` or `date()` |
+| `TIME` | `duckDbTime()` or `time()` |
+
+Use `--use-pg-time` to generate standard pg-core types instead of DuckDB helpers.
+
+### DuckDB-Specific Types
+
+| DuckDB Type | Drizzle Builder |
+|-------------|-----------------|
+| `type[]` (list) | `duckDbList('name', 'TYPE')` |
+| `type[n]` (array) | `duckDbArray('name', 'TYPE', n)` |
+| `STRUCT(...)` | `duckDbStruct('name', { ... })` |
+| `MAP(K, V)` | `duckDbMap('name', 'V')` |
+| `JSON` | `duckDbJson('name')` |
+| `BLOB`, `BYTEA` | `duckDbBlob('name')` |
+| `INET` | `duckDbInet('name')` |
+| `INTERVAL` | `duckDbInterval('name')` |
+
+### Other Types
+
+| DuckDB Type | Drizzle Builder |
+|-------------|-----------------|
+| `BOOLEAN`, `BOOL` | `boolean()` |
+| `UUID` | `uuid()` |
+
+Unrecognized types fall back to `text()` with a `/* TODO */` comment.
+
+## Constraints
+
+The introspector captures:
+
+- **Primary keys** — Single and composite
+- **Foreign keys** — With referenced table and columns
+- **Unique constraints** — Single column and multi-column
+
+## Views
+
+When using `--include-views` or `includeViews: true`, views are introspected as tables. Note that:
+
+- View columns are read-only in practice
+- Complex view expressions may not map perfectly
+- Constraints from underlying tables aren't reflected
+
+## System Schemas
+
+These schemas are automatically excluded:
+
+- `information_schema`
+- `pg_catalog`
+
+To introspect system tables, explicitly list them with `--schema`.
+
+## Workflow Example
+
+1. **Create database and tables** in DuckDB
+2. **Run introspection** to generate schema
+3. **Review and adjust** the generated file
+4. **Import in your app** for type-safe queries
+
+```bash
+# Generate schema
+bunx duckdb-introspect --url ./app.duckdb --out ./src/db/schema.ts
+
+# Use in your app
+```
+
+```typescript
+// src/db/index.ts
+import { DuckDBInstance } from '@duckdb/node-api';
+import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
+import * as schema from './schema.ts';
+
+const instance = await DuckDBInstance.create('./app.duckdb');
+const connection = await instance.connect();
+
+export const db = drizzle(connection, { schema });
+```
