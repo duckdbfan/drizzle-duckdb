@@ -375,187 +375,230 @@ async function setupAggregateFunctionsTest(db: DuckDBDatabase) {
 
 test('table configs: unique third param', async () => {
   console.log('creating cities');
-	const cities1Table = publicSchema.table('cities1', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		state: char('state', { length: 2 }),
-	}, (t) => ({
-		f: unique('custom_name').on(t.name, t.state).nullsNotDistinct(),
-		f1: unique('custom_name1').on(t.name, t.state),
-	}));
+  const cities1Table = publicSchema.table(
+    'cities1',
+    {
+      id: integer('id').primaryKey(),
+      name: text('name').notNull(),
+      state: char('state', { length: 2 }),
+    },
+    (t) => ({
+      f: unique('custom_name').on(t.name, t.state).nullsNotDistinct(),
+      f1: unique('custom_name1').on(t.name, t.state),
+    })
+  );
   console.log('created cities');
 
-	const tableConfig = getTableConfig(cities1Table);
+  const tableConfig = getTableConfig(cities1Table);
 
-	assert(tableConfig.uniqueConstraints.length === 2);
+  assert(tableConfig.uniqueConstraints.length === 2);
 
-	assert(tableConfig.uniqueConstraints[0]?.name === 'custom_name');
-	assert(tableConfig.uniqueConstraints[0]?.nullsNotDistinct);
+  assert(tableConfig.uniqueConstraints[0]?.name === 'custom_name');
+  assert(tableConfig.uniqueConstraints[0]?.nullsNotDistinct);
 
-	assert.deepEqual(tableConfig.uniqueConstraints[0]?.columns.map((t) => t.name), ['name', 'state']);
+  assert.deepEqual(
+    tableConfig.uniqueConstraints[0]?.columns.map((t) => t.name),
+    ['name', 'state']
+  );
 
-	assert(tableConfig.uniqueConstraints[1]?.name, 'custom_name1');
-	assert(!tableConfig.uniqueConstraints[1]?.nullsNotDistinct);
-	assert.deepEqual(tableConfig.uniqueConstraints[0]?.columns.map((t) => t.name), ['name', 'state']);
+  assert(tableConfig.uniqueConstraints[1]?.name, 'custom_name1');
+  assert(!tableConfig.uniqueConstraints[1]?.nullsNotDistinct);
+  assert.deepEqual(
+    tableConfig.uniqueConstraints[0]?.columns.map((t) => t.name),
+    ['name', 'state']
+  );
 });
 
 test('table configs: unique in column', async () => {
-	const cities1Table = publicSchema.table('cities1', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull().unique(),
-		state: char('state', { length: 2 }).unique('custom'),
-		field: char('field', { length: 2 }).unique('custom_field', { nulls: 'not distinct' }),
-	});
+  const cities1Table = publicSchema.table('cities1', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull().unique(),
+    state: char('state', { length: 2 }).unique('custom'),
+    field: char('field', { length: 2 }).unique('custom_field', {
+      nulls: 'not distinct',
+    }),
+  });
 
-	const tableConfig = getTableConfig(cities1Table);
+  const tableConfig = getTableConfig(cities1Table);
 
-	const columnName = tableConfig.columns.find((it) => it.name === 'name');
-	assert(columnName?.uniqueName === uniqueKeyName(cities1Table, [columnName!.name]));
-	assert(columnName?.isUnique);
+  const columnName = tableConfig.columns.find((it) => it.name === 'name');
+  assert(
+    columnName?.uniqueName === uniqueKeyName(cities1Table, [columnName!.name])
+  );
+  assert(columnName?.isUnique);
 
-	const columnState = tableConfig.columns.find((it) => it.name === 'state');
-	assert(columnState?.uniqueName === 'custom');
-	assert(columnState?.isUnique);
+  const columnState = tableConfig.columns.find((it) => it.name === 'state');
+  assert(columnState?.uniqueName === 'custom');
+  assert(columnState?.isUnique);
 
-	const columnField = tableConfig.columns.find((it) => it.name === 'field');
-	assert(columnField?.uniqueName === 'custom_field');
-	assert(columnField?.isUnique);
-	assert(columnField?.uniqueType === 'not distinct');
+  const columnField = tableConfig.columns.find((it) => it.name === 'field');
+  assert(columnField?.uniqueName === 'custom_field');
+  assert(columnField?.isUnique);
+  assert(columnField?.uniqueType === 'not distinct');
 });
 
 test('table config: foreign keys name', async () => {
-	const table = publicSchema.table('cities', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		state: text('state'),
-	}, (t) => ({
-		f: foreignKey({ foreignColumns: [t.id], columns: [t.id], name: 'custom_fk' }),
-	}));
+  const table = publicSchema.table(
+    'cities',
+    {
+      id: integer('id').primaryKey(),
+      name: text('name').notNull(),
+      state: text('state'),
+    },
+    (t) => ({
+      f: foreignKey({
+        foreignColumns: [t.id],
+        columns: [t.id],
+        name: 'custom_fk',
+      }),
+    })
+  );
 
-	const tableConfig = getTableConfig(table);
+  const tableConfig = getTableConfig(table);
 
-	assert.strictEqual(tableConfig.foreignKeys.length, 1);
-	assert.strictEqual(tableConfig.foreignKeys[0]!.getName(), 'custom_fk');
+  assert.strictEqual(tableConfig.foreignKeys.length, 1);
+  assert.strictEqual(tableConfig.foreignKeys[0]!.getName(), 'custom_fk');
 });
 
 test('table config: primary keys name', async () => {
-	const table = publicSchema.table('cities', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		state: text('state'),
-	}, (t) => ({
-		f: primaryKey({ columns: [t.id, t.name], name: 'custom_pk' }),
-	}));
+  const table = publicSchema.table(
+    'cities',
+    {
+      id: integer('id').primaryKey(),
+      name: text('name').notNull(),
+      state: text('state'),
+    },
+    (t) => ({
+      f: primaryKey({ columns: [t.id, t.name], name: 'custom_pk' }),
+    })
+  );
 
-	const tableConfig = getTableConfig(table);
+  const tableConfig = getTableConfig(table);
 
-	assert.strictEqual(tableConfig.primaryKeys.length, 1);
-	assert.strictEqual(tableConfig.primaryKeys[0]!.getName(), 'custom_pk');
+  assert.strictEqual(tableConfig.primaryKeys.length, 1);
+  assert.strictEqual(tableConfig.primaryKeys[0]!.getName(), 'custom_pk');
 });
 
 test('select all fields', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const now = Date.now();
+  const now = Date.now();
 
-	await db.insert(usersTable).values({ name: 'John' });
-	const result = await db.select().from(usersTable);
+  await db.insert(usersTable).values({ name: 'John' });
+  const result = await db.select().from(usersTable);
 
-	assert(result[0]!.createdAt instanceof Date); // eslint-disable-line no-instanceof/no-instanceof
-	assert(Math.abs(result[0]!.createdAt.getTime() - now) < 100);
-	assert.deepEqual(result, [
-		{ id: 1, name: 'John', verified: false, createdAt: result[0]!.createdAt },
-	], `
+  assert(result[0]!.createdAt instanceof Date); // eslint-disable-line no-instanceof/no-instanceof
+  assert(Math.abs(result[0]!.createdAt.getTime() - now) < 100);
+  assert.deepEqual(
+    result,
+    [{ id: 1, name: 'John', verified: false, createdAt: result[0]!.createdAt }],
+    `
   Expected: ${JSON.stringify([
     { id: 1, name: 'John', verified: false, createdAt: result[0]!.createdAt },
   ])}
   Actual: ${JSON.stringify(result)}
-  `);
+  `
+  );
 });
 
 test('select sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
-	const users = await db
-		.select({
-			name: sql`upper(${usersTable.name})`,
-		})
-		.from(usersTable);
+  await db.insert(usersTable).values({ name: 'John' });
+  const users = await db
+    .select({
+      name: sql`upper(${usersTable.name})`,
+    })
+    .from(usersTable);
 
-	assert.deepEqual(users, [{ name: 'JOHN' }]);
+  assert.deepEqual(users, [{ name: 'JOHN' }]);
 });
 
 test('select typed sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
+  await db.insert(usersTable).values({ name: 'John' });
 
-	const users = await db.select({
-		name: sql<string>`upper(${usersTable.name})`,
-	}).from(usersTable);
+  const users = await db
+    .select({
+      name: sql<string>`upper(${usersTable.name})`,
+    })
+    .from(usersTable);
 
-	assert.deepEqual(users, [{ name: 'JOHN' }]);
+  assert.deepEqual(users, [{ name: 'JOHN' }]);
 });
 
 test('$default function', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const insertedOrder = await db.insert(orders).values({ id: 1, region: 'Ukraine', amount: 1, quantity: 1 })
-		.returning();
-	const selectedOrder = await db.select().from(orders);
+  const insertedOrder = await db
+    .insert(orders)
+    .values({ id: 1, region: 'Ukraine', amount: 1, quantity: 1 })
+    .returning();
+  const selectedOrder = await db.select().from(orders);
 
-	assert.deepEqual(insertedOrder, [{
-		id: 1,
-		amount: 1,
-		quantity: 1,
-		region: 'Ukraine',
-		product: 'random_string',
-	}]);
+  assert.deepEqual(insertedOrder, [
+    {
+      id: 1,
+      amount: 1,
+      quantity: 1,
+      region: 'Ukraine',
+      product: 'random_string',
+    },
+  ]);
 
-	assert.deepEqual(selectedOrder, [{
-		id: 1,
-		amount: 1,
-		quantity: 1,
-		region: 'Ukraine',
-		product: 'random_string',
-	}]);
+  assert.deepEqual(selectedOrder, [
+    {
+      id: 1,
+      amount: 1,
+      quantity: 1,
+      region: 'Ukraine',
+      product: 'random_string',
+    },
+  ]);
 });
 
 test('select distinct', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const usersDistinctTable = publicSchema.table('users_distinct', {
-		id: integer('id').notNull(),
-		name: text('name').notNull(),
-		age: integer('age').notNull(),
-	});
+  const usersDistinctTable = publicSchema.table('users_distinct', {
+    id: integer('id').notNull(),
+    name: text('name').notNull(),
+    age: integer('age').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${usersDistinctTable}`);
-	await db.execute(sql`create table ${usersDistinctTable} (id integer, name text, age integer)`);
+  await db.execute(sql`drop table if exists ${usersDistinctTable}`);
+  await db.execute(
+    sql`create table ${usersDistinctTable} (id integer, name text, age integer)`
+  );
 
-	await db.insert(usersDistinctTable).values([
-		{ id: 1, name: 'John', age: 24 },
-		{ id: 1, name: 'John', age: 24 },
-		{ id: 2, name: 'John', age: 25 },
-		{ id: 1, name: 'Jane', age: 24 },
-		{ id: 1, name: 'Jane', age: 26 },
-	]);
-	const users1 = await db.selectDistinct().from(usersDistinctTable).orderBy(
-		usersDistinctTable.id,
-		usersDistinctTable.name,
-	);
-	const users2 = await db.selectDistinctOn([usersDistinctTable.id]).from(usersDistinctTable).orderBy(
-		usersDistinctTable.id,
-	);
-	const users3 = await db.selectDistinctOn([usersDistinctTable.name], { name: usersDistinctTable.name }).from(
-		usersDistinctTable,
-	).orderBy(usersDistinctTable.name);
-	const users4 = await db.selectDistinctOn([usersDistinctTable.id, usersDistinctTable.age]).from(
-		usersDistinctTable,
-	).orderBy(usersDistinctTable.id, usersDistinctTable.age);
+  await db.insert(usersDistinctTable).values([
+    { id: 1, name: 'John', age: 24 },
+    { id: 1, name: 'John', age: 24 },
+    { id: 2, name: 'John', age: 25 },
+    { id: 1, name: 'Jane', age: 24 },
+    { id: 1, name: 'Jane', age: 26 },
+  ]);
+  const users1 = await db
+    .selectDistinct()
+    .from(usersDistinctTable)
+    .orderBy(usersDistinctTable.id, usersDistinctTable.name);
+  const users2 = await db
+    .selectDistinctOn([usersDistinctTable.id])
+    .from(usersDistinctTable)
+    .orderBy(usersDistinctTable.id);
+  const users3 = await db
+    .selectDistinctOn([usersDistinctTable.name], {
+      name: usersDistinctTable.name,
+    })
+    .from(usersDistinctTable)
+    .orderBy(usersDistinctTable.name);
+  const users4 = await db
+    .selectDistinctOn([usersDistinctTable.id, usersDistinctTable.age])
+    .from(usersDistinctTable)
+    .orderBy(usersDistinctTable.id, usersDistinctTable.age);
 
-	await db.execute(sql`drop table ${usersDistinctTable}`);
+  await db.execute(sql`drop table ${usersDistinctTable}`);
 
   const sortedActual = [...users1].sort(
     (a, b) => a.id - b.id || a.age - b.age || a.name.localeCompare(b.name)
@@ -565,376 +608,437 @@ test('select distinct', async () => {
     { id: 1, name: 'John', age: 24 },
     { id: 1, name: 'Jane', age: 26 },
     { id: 2, name: 'John', age: 25 },
-  ].sort((a, b) => a.id - b.id || a.age - b.age || a.name.localeCompare(b.name));
+  ].sort(
+    (a, b) => a.id - b.id || a.age - b.age || a.name.localeCompare(b.name)
+  );
   assert.deepStrictEqual(sortedActual, sortedExpected);
 
-	assert.deepEqual(users2.length, 2);
-	assert.deepEqual(users2[0]?.id, 1);
-	assert.deepEqual(users2[1]?.id, 2);
+  assert.deepEqual(users2.length, 2);
+  assert.deepEqual(users2[0]?.id, 1);
+  assert.deepEqual(users2[1]?.id, 2);
 
-	assert.deepEqual(users3.length, 2);
-	assert.deepEqual(users3[0]?.name, 'Jane');
-	assert.deepEqual(users3[1]?.name, 'John');
+  assert.deepEqual(users3.length, 2);
+  assert.deepEqual(users3[0]?.name, 'Jane');
+  assert.deepEqual(users3[1]?.name, 'John');
 
-	assert.deepEqual(users4, [
-		{ id: 1, name: 'John', age: 24 },
-		{ id: 1, name: 'Jane', age: 26 },
-		{ id: 2, name: 'John', age: 25 },
-	]);
+  assert.deepEqual(users4, [
+    { id: 1, name: 'John', age: 24 },
+    { id: 1, name: 'Jane', age: 26 },
+    { id: 2, name: 'John', age: 25 },
+  ]);
 });
 
 test('insert returning sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = await db
-		.insert(usersTable)
-		.values({ id: 1, name: 'John' })
-		.returning({
-			name: sql`upper(${usersTable.name})`,
-		});
+  const users = await db
+    .insert(usersTable)
+    .values({ id: 1, name: 'John' })
+    .returning({
+      name: sql`upper(${usersTable.name})`,
+    });
 
-	assert.deepEqual(users, [{ name: 'JOHN' }]);
+  assert.deepEqual(users, [{ name: 'JOHN' }]);
 });
 
 test('delete returning sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
-	const users = await db
-		.delete(usersTable)
-		.where(eq(usersTable.name, 'John'))
-		.returning({
-			name: sql`upper(${usersTable.name})`,
-		});
+  await db.insert(usersTable).values({ name: 'John' });
+  const users = await db
+    .delete(usersTable)
+    .where(eq(usersTable.name, 'John'))
+    .returning({
+      name: sql`upper(${usersTable.name})`,
+    });
 
-	assert.deepEqual(users, [{ name: 'JOHN' }]);
+  assert.deepEqual(users, [{ name: 'JOHN' }]);
 });
 
-	// Currently, update returning causes unique constraint violation
-	// see: https://duckdb.org/docs/stable/sql/indexes.html#limitations-of-art-indexes
-	test('update returning sql', async () => {
-		const { db } = ctx;
+// Currently, update returning causes unique constraint violation
+// see: https://duckdb.org/docs/stable/sql/indexes.html#limitations-of-art-indexes
+test('update returning sql', async () => {
+  const { db } = ctx;
 
-		await db.insert(usersTable).values({ name: 'John' });
+  await db.insert(usersTable).values({ name: 'John' });
 
-		const users = await db
-			.update(usersTable)
-			.set({ name: 'Jane' })
-			.where(eq(usersTable.name, 'John'))
-			.returning({
-			name: sql`upper(${usersTable.name})`,
-		});
+  const users = await db
+    .update(usersTable)
+    .set({ name: 'Jane' })
+    .where(eq(usersTable.name, 'John'))
+    .returning({
+      name: sql`upper(${usersTable.name})`,
+    });
 
-	assert.deepEqual(users, [{ name: 'JANE' }]);
+  assert.deepEqual(users, [{ name: 'JANE' }]);
 });
 
 // Currently, update returning causes unique constraint violation
 // see: https://duckdb.org/docs/stable/sql/indexes.html#limitations-of-art-indexes
 test('update with returning all fields', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const now = Date.now();
+  const now = Date.now();
 
-	await db.insert(usersTable).values({ name: 'John' });
-	const users = await db
-		.update(usersTable)
-		.set({ name: 'Jane' })
-		.where(eq(usersTable.name, 'John'))
-		.returning();
+  await db.insert(usersTable).values({ name: 'John' });
+  const users = await db
+    .update(usersTable)
+    .set({ name: 'Jane' })
+    .where(eq(usersTable.name, 'John'))
+    .returning();
 
-	assert(users[0]!.createdAt instanceof Date); // eslint-disable-line no-instanceof/no-instanceof
-	assert(Math.abs(users[0]!.createdAt.getTime() - now) < 100);
-	assert.deepEqual(users, [
-		{ id: 1, name: 'Jane', verified: false, createdAt: users[0]!.createdAt },
-	]);
+  assert(users[0]!.createdAt instanceof Date); // eslint-disable-line no-instanceof/no-instanceof
+  assert(Math.abs(users[0]!.createdAt.getTime() - now) < 100);
+  assert.deepEqual(users, [
+    { id: 1, name: 'Jane', verified: false, createdAt: users[0]!.createdAt },
+  ]);
 });
 
 // Currently, update returning causes unique constraint violation
 // see: https://duckdb.org/docs/stable/sql/indexes.html#limitations-of-art-indexes
 test('update with returning partial', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
-	const users = await db
-		.update(usersTable)
-		.set({ name: 'Jane' })
-		.where(eq(usersTable.name, 'John'))
-		.returning({
-			id: usersTable.id,
-			name: usersTable.name,
-		});
+  await db.insert(usersTable).values({ name: 'John' });
+  const users = await db
+    .update(usersTable)
+    .set({ name: 'Jane' })
+    .where(eq(usersTable.name, 'John'))
+    .returning({
+      id: usersTable.id,
+      name: usersTable.name,
+    });
 
-	assert.deepEqual(users, [{ id: 1, name: 'Jane' }]);
+  assert.deepEqual(users, [{ id: 1, name: 'Jane' }]);
 });
 
 test('delete with returning all fields', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const now = Date.now();
+  const now = Date.now();
 
-	await db.insert(usersTable).values({ id: 99, name: 'John' });
-	const users = await db.delete(usersTable).where(eq(usersTable.name, 'John')).returning();
+  await db.insert(usersTable).values({ id: 99, name: 'John' });
+  const users = await db
+    .delete(usersTable)
+    .where(eq(usersTable.name, 'John'))
+    .returning();
 
-	assert(users[0]!.createdAt instanceof Date); // eslint-disable-line no-instanceof/no-instanceof
-	assert(Math.abs(users[0]!.createdAt.getTime() - now) < 100);
-	assert.deepEqual(users, [
-		{ id: 99, name: 'John', verified: false, createdAt: users[0]!.createdAt },
-	]);
+  assert(users[0]!.createdAt instanceof Date); // eslint-disable-line no-instanceof/no-instanceof
+  assert(Math.abs(users[0]!.createdAt.getTime() - now) < 100);
+  assert.deepEqual(users, [
+    { id: 99, name: 'John', verified: false, createdAt: users[0]!.createdAt },
+  ]);
 });
 
 test('delete with returning partial', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 100, name: 'John' });
-	const users = await db.delete(usersTable).where(eq(usersTable.name, 'John')).returning({
-		id: usersTable.id,
-		name: usersTable.name,
-	});
+  await db.insert(usersTable).values({ id: 100, name: 'John' });
+  const users = await db
+    .delete(usersTable)
+    .where(eq(usersTable.name, 'John'))
+    .returning({
+      id: usersTable.id,
+      name: usersTable.name,
+    });
 
-	assert.deepEqual(users, [{ id: 100, name: 'John' }]);
+  assert.deepEqual(users, [{ id: 100, name: 'John' }]);
 });
 
 test('insert + select', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 101, name: 'John' });
-	const result = await db.select().from(usersTable);
-	assert.deepEqual(result, [
-		{ id: 101, name: 'John', verified: false, createdAt: result[0]!.createdAt },
-	]);
+  await db.insert(usersTable).values({ id: 101, name: 'John' });
+  const result = await db.select().from(usersTable);
+  assert.deepEqual(result, [
+    { id: 101, name: 'John', verified: false, createdAt: result[0]!.createdAt },
+  ]);
 
-	await db.insert(usersTable).values({ id: 102, name: 'Jane' });
-	const result2 = await db.select().from(usersTable);
-	assert.deepEqual(result2, [
-		{ id: 101, name: 'John', verified: false, createdAt: result2[0]!.createdAt },
-		{ id: 102, name: 'Jane', verified: false, createdAt: result2[1]!.createdAt },
-	]);
+  await db.insert(usersTable).values({ id: 102, name: 'Jane' });
+  const result2 = await db.select().from(usersTable);
+  assert.deepEqual(result2, [
+    {
+      id: 101,
+      name: 'John',
+      verified: false,
+      createdAt: result2[0]!.createdAt,
+    },
+    {
+      id: 102,
+      name: 'Jane',
+      verified: false,
+      createdAt: result2[1]!.createdAt,
+    },
+  ]);
 });
 
 test('json insert', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 103, name: 'John' });
-	const result = await db
-		.select({
-			id: usersTable.id,
-			name: usersTable.name,
-		})
-		.from(usersTable);
+  await db.insert(usersTable).values({ id: 103, name: 'John' });
+  const result = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+    })
+    .from(usersTable);
 
-	assert.deepEqual(result, [{ id: 103, name: 'John' }]);
+  assert.deepEqual(result, [{ id: 103, name: 'John' }]);
 });
 
 test('char insert', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(citiesTable).values({ name: 'Austin', state: 'TX' });
-	const result = await db
-		.select({ id: citiesTable.id, name: citiesTable.name, state: citiesTable.state })
-		.from(citiesTable);
+  await db.insert(citiesTable).values({ name: 'Austin', state: 'TX' });
+  const result = await db
+    .select({
+      id: citiesTable.id,
+      name: citiesTable.name,
+      state: citiesTable.state,
+    })
+    .from(citiesTable);
 
-	assert.deepEqual(result, [{ id: 1, name: 'Austin', state: 'TX' }]);
+  assert.deepEqual(result, [{ id: 1, name: 'Austin', state: 'TX' }]);
 });
 
 test('char update', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(citiesTable).values({ id: 1, name: 'Austin', state: 'TX' });
-	await db.update(citiesTable).set({ name: 'Atlanta', state: 'GA' }).where(eq(citiesTable.id, 1));
-	const result = await db
-		.select({ id: citiesTable.id, name: citiesTable.name, state: citiesTable.state })
-		.from(citiesTable);
+  await db.insert(citiesTable).values({ id: 1, name: 'Austin', state: 'TX' });
+  await db
+    .update(citiesTable)
+    .set({ name: 'Atlanta', state: 'GA' })
+    .where(eq(citiesTable.id, 1));
+  const result = await db
+    .select({
+      id: citiesTable.id,
+      name: citiesTable.name,
+      state: citiesTable.state,
+    })
+    .from(citiesTable);
 
-	assert.deepEqual(result, [{ id: 1, name: 'Atlanta', state: 'GA' }]);
+  assert.deepEqual(result, [{ id: 1, name: 'Atlanta', state: 'GA' }]);
 });
 
 test('char delete', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(citiesTable).values({ name: 'Austin', state: 'TX' });
-	await db.delete(citiesTable).where(eq(citiesTable.state, 'TX'));
-	const result = await db
-		.select({ id: citiesTable.id, name: citiesTable.name, state: citiesTable.state })
-		.from(citiesTable);
+  await db.insert(citiesTable).values({ name: 'Austin', state: 'TX' });
+  await db.delete(citiesTable).where(eq(citiesTable.state, 'TX'));
+  const result = await db
+    .select({
+      id: citiesTable.id,
+      name: citiesTable.name,
+      state: citiesTable.state,
+    })
+    .from(citiesTable);
 
-	assert.deepEqual(result, []);
+  assert.deepEqual(result, []);
 });
 
 test('insert with overridden default values', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 104, name: 'John', verified: true });
-	const result = await db.select().from(usersTable);
+  await db.insert(usersTable).values({ id: 104, name: 'John', verified: true });
+  const result = await db.select().from(usersTable);
 
-	assert.deepEqual(result, [
-		{ id: 104, name: 'John', verified: true, createdAt: result[0]!.createdAt },
-	]);
+  assert.deepEqual(result, [
+    { id: 104, name: 'John', verified: true, createdAt: result[0]!.createdAt },
+  ]);
 });
 
 test('insert many', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db
-		.insert(usersTable)
-		.values([
-			{ id: 104, name: 'John' },
-			{ id: 105, name: 'Bruce' },
-			{ id: 106, name: 'Jane' },
-			{ id: 107, name: 'Austin', verified: true },
-		]);
-	const result = await db
-		.select({
-			id: usersTable.id,
-			name: usersTable.name,
-			verified: usersTable.verified,
-		})
-		.from(usersTable);
+  await db.insert(usersTable).values([
+    { id: 104, name: 'John' },
+    { id: 105, name: 'Bruce' },
+    { id: 106, name: 'Jane' },
+    { id: 107, name: 'Austin', verified: true },
+  ]);
+  const result = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      verified: usersTable.verified,
+    })
+    .from(usersTable);
 
-	assert.deepEqual(result, [
-		{ id: 104, name: 'John', verified: false },
-		{ id: 105, name: 'Bruce', verified: false },
-		{ id: 106, name: 'Jane', verified: false },
-		{ id: 107, name: 'Austin', verified: true },
-	]);
+  assert.deepEqual(result, [
+    { id: 104, name: 'John', verified: false },
+    { id: 105, name: 'Bruce', verified: false },
+    { id: 106, name: 'Jane', verified: false },
+    { id: 107, name: 'Austin', verified: true },
+  ]);
 });
 
 test('insert many with returning', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const result = await db
-		.insert(usersTable)
-		.values([
-			{ id: 108, name: 'John' },
-			{ id: 109, name: 'Bruce' },
-			{ id: 110, name: 'Jane' },
-			{ id: 111, name: 'Austin', verified: true },
-		])
-		.returning({
-			id: usersTable.id,
-			name: usersTable.name,
-			verified: usersTable.verified,
-		});
+  const result = await db
+    .insert(usersTable)
+    .values([
+      { id: 108, name: 'John' },
+      { id: 109, name: 'Bruce' },
+      { id: 110, name: 'Jane' },
+      { id: 111, name: 'Austin', verified: true },
+    ])
+    .returning({
+      id: usersTable.id,
+      name: usersTable.name,
+      verified: usersTable.verified,
+    });
 
-	assert.deepEqual(result, [
-		{ id: 108, name: 'John', verified: false },
-		{ id: 109, name: 'Bruce', verified: false },
-		{ id: 110, name: 'Jane', verified: false },
-		{ id: 111, name: 'Austin', verified: true },
-	]);
+  assert.deepEqual(result, [
+    { id: 108, name: 'John', verified: false },
+    { id: 109, name: 'Bruce', verified: false },
+    { id: 110, name: 'Jane', verified: false },
+    { id: 111, name: 'Austin', verified: true },
+  ]);
 });
 
 test('select with group by as field', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
+  await db
+    .insert(usersTable)
+    .values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
 
-	const result = await db
-		.select({ name: usersTable.name })
-		.from(usersTable)
-		.groupBy(usersTable.name)
-    .orderBy(sql`all`);;
+  const result = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .groupBy(usersTable.name)
+    .orderBy(sql`all`);
 
   assert.deepEqual(result, [{ name: 'Jane' }, { name: 'John' }]);
 });
 
 test('select with exists', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ id: 999, name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
+  await db
+    .insert(usersTable)
+    .values([{ id: 999, name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
 
-	const user = alias(usersTable, 'user');
-	const result = await db.select({ name: usersTable.name }).from(usersTable).where(
-		exists(db.select({ one: sql`999` }).from(user).where(and(eq(usersTable.name, 'John'), eq(user.id, usersTable.id)))),
-	);
+  const user = alias(usersTable, 'user');
+  const result = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(
+      exists(
+        db
+          .select({ one: sql`999` })
+          .from(user)
+          .where(and(eq(usersTable.name, 'John'), eq(user.id, usersTable.id)))
+      )
+    );
 
-	assert.deepEqual(result, [{ name: 'John' }]);
+  assert.deepEqual(result, [{ name: 'John' }]);
 });
 
 test('select with group by as sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
+  await db
+    .insert(usersTable)
+    .values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
 
-	const result = await db
-		.select({ name: usersTable.name })
-		.from(usersTable)
-		.groupBy(sql`${usersTable.name}`)
+  const result = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .groupBy(sql`${usersTable.name}`)
     .orderBy(sql`all`);
 
-	assert.deepEqual(result, [{ name: 'Jane' }, { name: 'John' }]);
+  assert.deepEqual(result, [{ name: 'Jane' }, { name: 'John' }]);
 });
 
 test('select with group by as sql + column', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
+  await db
+    .insert(usersTable)
+    .values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
 
-	const result = await db
-		.select({ name: usersTable.name })
-		.from(usersTable)
-		.groupBy(sql`${usersTable.name}`, usersTable.id)
+  const result = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .groupBy(sql`${usersTable.name}`, usersTable.id)
     .orderBy(sql`all`);
 
-	assert.deepEqual(result, [{ name: 'Jane' }, { name: 'Jane' }, { name: 'John' }]);
+  assert.deepEqual(result, [
+    { name: 'Jane' },
+    { name: 'Jane' },
+    { name: 'John' },
+  ]);
 });
 
 test('select with group by as column + sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
+  await db
+    .insert(usersTable)
+    .values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
 
-	const result = await db
-		.select({ name: usersTable.name })
-		.from(usersTable)
-		.groupBy(usersTable.id, sql`${usersTable.name}`)
+  const result = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .groupBy(usersTable.id, sql`${usersTable.name}`)
     .orderBy(sql`all`);
 
-	assert.deepEqual(result, [{ name: 'Jane' }, { name: 'Jane' }, { name: 'John' }]);
+  assert.deepEqual(result, [
+    { name: 'Jane' },
+    { name: 'Jane' },
+    { name: 'John' },
+  ]);
 });
 
 test('select with group by complex query', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
+  await db
+    .insert(usersTable)
+    .values([{ name: 'John' }, { name: 'Jane' }, { name: 'Jane' }]);
 
-	const result = await db
-		.select({ name: usersTable.name })
-		.from(usersTable)
-		.groupBy(usersTable.id, sql`${usersTable.name}`)
-		.orderBy(asc(usersTable.name))
-		.limit(1);
+  const result = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .groupBy(usersTable.id, sql`${usersTable.name}`)
+    .orderBy(asc(usersTable.name))
+    .limit(1);
 
-	assert.deepEqual(result, [{ name: 'Jane' }]);
+  assert.deepEqual(result, [{ name: 'Jane' }]);
 });
 
 test('build query', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const query = db
-		.select({ id: usersTable.id, name: usersTable.name })
-		.from(usersTable)
-		.groupBy(usersTable.id, usersTable.name)
-		.toSQL();
+  const query = db
+    .select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable)
+    .groupBy(usersTable.id, usersTable.name)
+    .toSQL();
 
-	assert.deepEqual(query, {
-		sql: 'select "id" as "id", "name" as "name" from "buplic"."users" group by "buplic"."users"."id", "buplic"."users"."name"',
-		params: [],
-	});
+  assert.deepEqual(query, {
+    sql: 'select "id" as "id", "name" as "name" from "buplic"."users" group by "buplic"."users"."id", "buplic"."users"."name"',
+    params: [],
+  });
 });
 
 test('insert sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 200, name: sql`${'John'}` });
-	const result = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
-	assert.deepEqual(result, [{ id: 200, name: 'John' }]);
+  await db.insert(usersTable).values({ id: 200, name: sql`${'John'}` });
+  const result = await db
+    .select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable);
+  assert.deepEqual(result, [{ id: 200, name: 'John' }]);
 });
 
 test('partial join with alias', async () => {
-	const { db } = ctx;
-	const customerAlias = alias(usersTable, 'customer');
+  const { db } = ctx;
+  const customerAlias = alias(usersTable, 'customer');
 
-	await db.insert(usersTable).values([{ name: 'Ivan' }, { name: 'Hans' }]);
+  await db.insert(usersTable).values([{ name: 'Ivan' }, { name: 'Hans' }]);
   const result = await db
     .select({
       userId: usersTable.id,
@@ -946,586 +1050,638 @@ test('partial join with alias', async () => {
     .leftJoin(customerAlias, eq(customerAlias.id, 2))
     .where(eq(usersTable.id, 1));
 
-	assert.deepEqual(result, [
-		{
+  assert.deepEqual(result, [
+    {
       userId: 1,
       userName: 'Ivan',
       customerId: 2,
       customerName: 'Hans',
     },
-	]);
+  ]);
 });
 
 test('full join with alias', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const pgTable = pgTableCreator((name) => `prefixed_${name}`);
+  const pgTable = pgTableCreator((name) => `prefixed_${name}`);
 
-	const users = pgTable('users', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-	});
+  const users = pgTable('users', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
-	await db.execute(sql`create table ${users} (id integer primary key, name text not null)`);
+  await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(
+    sql`create table ${users} (id integer primary key, name text not null)`
+  );
 
-	const customers = alias(users, 'customer');
+  const customers = alias(users, 'customer');
 
-	await db.insert(users).values([{ id: 10, name: 'Ivan' }, { id: 11, name: 'Hans' }]);
-	const result = await db
-		.select()
-		.from(users)
-		.leftJoin(customers, eq(customers.id, 11))
-		.where(eq(users.id, 10));
+  await db.insert(users).values([
+    { id: 10, name: 'Ivan' },
+    { id: 11, name: 'Hans' },
+  ]);
+  const result = await db
+    .select()
+    .from(users)
+    .leftJoin(customers, eq(customers.id, 11))
+    .where(eq(users.id, 10));
 
-	assert.deepEqual(result, [{
-		users: {
-			id: 10,
-			name: 'Ivan',
-		},
-		customer: {
-			id: 11,
-			name: 'Hans',
-		},
-	}]);
+  assert.deepEqual(result, [
+    {
+      users: {
+        id: 10,
+        name: 'Ivan',
+      },
+      customer: {
+        id: 11,
+        name: 'Hans',
+      },
+    },
+  ]);
 
-	await db.execute(sql`drop table ${users}`);
+  await db.execute(sql`drop table ${users}`);
 });
 
 test('select from alias', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const pgTable = pgTableCreator((name) => `prefixed_${name}`);
+  const pgTable = pgTableCreator((name) => `prefixed_${name}`);
 
-	const users = pgTable('users', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-	});
+  const users = pgTable('users', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
-	await db.execute(sql`create table ${users} (id integer primary key, name text not null)`);
+  await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(
+    sql`create table ${users} (id integer primary key, name text not null)`
+  );
 
-	const customers = alias(users, 'customer');
+  const customers = alias(users, 'customer');
 
-	await db.insert(users).values([{ id: 10, name: 'Ivan' }, { id: 11, name: 'Hans' }]);
-	const result = await db
-		.select()
-		.from(customers);
+  await db.insert(users).values([
+    { id: 10, name: 'Ivan' },
+    { id: 11, name: 'Hans' },
+  ]);
+  const result = await db.select().from(customers);
 
-	assert.deepEqual(result, [
-		{
-			id: 10,
-			name: 'Ivan',
-		},
-		{
-			id: 11,
-			name: 'Hans',
-		},
-	]);
+  assert.deepEqual(result, [
+    {
+      id: 10,
+      name: 'Ivan',
+    },
+    {
+      id: 11,
+      name: 'Hans',
+    },
+  ]);
 
-	await db.execute(sql`drop table ${users}`);
+  await db.execute(sql`drop table ${users}`);
 });
 
 test('insert with spaces', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 301, name: sql`'Jo   h     n'` });
-	const result = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  await db.insert(usersTable).values({ id: 301, name: sql`'Jo   h     n'` });
+  const result = await db
+    .select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable);
 
-	assert.deepEqual(result, [{ id: 301, name: 'Jo   h     n' }]);
+  assert.deepEqual(result, [{ id: 301, name: 'Jo   h     n' }]);
 });
 
 test('prepared statement', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 302, name: 'John' });
-	const statement = db
-		.select({
-			id: usersTable.id,
-			name: usersTable.name,
-		})
-		.from(usersTable)
-		.prepare('statement1');
-	const result = await statement.execute();
+  await db.insert(usersTable).values({ id: 302, name: 'John' });
+  const statement = db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+    })
+    .from(usersTable)
+    .prepare('statement1');
+  const result = await statement.execute();
 
-	assert.deepEqual(result, [{ id: 302, name: 'John' }]);
+  assert.deepEqual(result, [{ id: 302, name: 'John' }]);
 });
 
 test('prepared statement reuse', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const stmt = db
-		.insert(usersTable)
-		.values({
+  const stmt = db
+    .insert(usersTable)
+    .values({
       id: sql.placeholder('id'),
-			verified: true,
-			name: sql.placeholder('name'),
-		})
-		.prepare('stmt2');
+      verified: true,
+      name: sql.placeholder('name'),
+    })
+    .prepare('stmt2');
 
-	for (let i = 0; i < 10; i++) {
-		await stmt.execute({ id: i + 401, name: `John ${i}` });
-	}
+  for (let i = 0; i < 10; i++) {
+    await stmt.execute({ id: i + 401, name: `John ${i}` });
+  }
 
-	const result = await db
-		.select({
-			id: usersTable.id,
-			name: usersTable.name,
-			verified: usersTable.verified,
-		})
-		.from(usersTable);
+  const result = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      verified: usersTable.verified,
+    })
+    .from(usersTable);
 
-	assert.deepEqual(result, [
-		{ id: 401, name: 'John 0', verified: true },
-		{ id: 402, name: 'John 1', verified: true },
-		{ id: 403, name: 'John 2', verified: true },
-		{ id: 404, name: 'John 3', verified: true },
-		{ id: 405, name: 'John 4', verified: true },
-		{ id: 406, name: 'John 5', verified: true },
-		{ id: 407, name: 'John 6', verified: true },
-		{ id: 408, name: 'John 7', verified: true },
-		{ id: 409, name: 'John 8', verified: true },
-		{ id: 410, name: 'John 9', verified: true },
-	]);
+  assert.deepEqual(result, [
+    { id: 401, name: 'John 0', verified: true },
+    { id: 402, name: 'John 1', verified: true },
+    { id: 403, name: 'John 2', verified: true },
+    { id: 404, name: 'John 3', verified: true },
+    { id: 405, name: 'John 4', verified: true },
+    { id: 406, name: 'John 5', verified: true },
+    { id: 407, name: 'John 6', verified: true },
+    { id: 408, name: 'John 7', verified: true },
+    { id: 409, name: 'John 8', verified: true },
+    { id: 410, name: 'John 9', verified: true },
+  ]);
 });
 
 test('prepared statement with placeholder in .where', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 411, name: 'John' });
-	const stmt = db
-		.select({
-			id: usersTable.id,
-			name: usersTable.name,
-		})
-		.from(usersTable)
-		.where(eq(usersTable.id, sql.placeholder('id')))
-		.prepare('stmt3');
-	const result = await stmt.execute({ id: 411 });
+  await db.insert(usersTable).values({ id: 411, name: 'John' });
+  const stmt = db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, sql.placeholder('id')))
+    .prepare('stmt3');
+  const result = await stmt.execute({ id: 411 });
 
-	assert.deepEqual(result, [{ id: 411, name: 'John' }]);
+  assert.deepEqual(result, [{ id: 411, name: 'John' }]);
 });
 
 test('prepared statement with placeholder in .limit', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ id: 412, name: 'John' });
-	const stmt = db
-		.select({
-			id: usersTable.id,
-			name: usersTable.name,
-		})
-		.from(usersTable)
-		.where(eq(usersTable.id, sql.placeholder('id')))
-		.limit(sql.placeholder('limit'))
-		.prepare('stmt_limit');
+  await db.insert(usersTable).values({ id: 412, name: 'John' });
+  const stmt = db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, sql.placeholder('id')))
+    .limit(sql.placeholder('limit'))
+    .prepare('stmt_limit');
 
-	const result = await stmt.execute({ id: 412, limit: 1 });
+  const result = await stmt.execute({ id: 412, limit: 1 });
 
-	assert.deepEqual(result, [{ id: 412, name: 'John' }]);
-	assert.strictEqual(result.length, 1);
+  assert.deepEqual(result, [{ id: 412, name: 'John' }]);
+  assert.strictEqual(result.length, 1);
 });
 
 test('prepared statement with placeholder in .offset', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ id: 413, name: 'John' }, { id: 414, name: 'John1' }]);
-	const stmt = db
-		.select({
-			id: usersTable.id,
-			name: usersTable.name,
-		})
-		.from(usersTable)
-		.offset(sql.placeholder('offset'))
-		.prepare('stmt_offset');
+  await db.insert(usersTable).values([
+    { id: 413, name: 'John' },
+    { id: 414, name: 'John1' },
+  ]);
+  const stmt = db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+    })
+    .from(usersTable)
+    .offset(sql.placeholder('offset'))
+    .prepare('stmt_offset');
 
-	const result = await stmt.execute({ offset: 1 });
+  const result = await stmt.execute({ offset: 1 });
 
-	assert.deepEqual(result, [{ id: 414, name: 'John1' }]);
+  assert.deepEqual(result, [{ id: 414, name: 'John1' }]);
 });
 
 test('migrator : default migration strategy', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.execute(sql`drop table if exists all_columns`);
-	await db.execute(sql`drop table if exists users12`);
-	await db.execute(sql`drop schema if exists drizzle cascade`);
+  await db.execute(sql`drop table if exists all_columns`);
+  await db.execute(sql`drop table if exists users12`);
+  await db.execute(sql`drop schema if exists drizzle cascade`);
 
-	await migrate(db, './test/drizzle2/pg');
+  await migrate(db, './test/drizzle2/pg');
 
-	const sequences = await db.execute<{ sequencename: string }>(
-		sql`select sequencename from pg_catalog.pg_sequences where schemaname = 'drizzle' and sequencename = '__drizzle_migrations_id_seq'`,
-	);
-	assert.equal(sequences.length, 1);
+  const sequences = await db.execute<{ sequencename: string }>(
+    sql`select sequencename from pg_catalog.pg_sequences where schemaname = 'drizzle' and sequencename = '__drizzle_migrations_id_seq'`
+  );
+  assert.equal(sequences.length, 1);
 
-	await db.insert(usersMigratorTable).values({ name: 'John', email: 'email' });
+  await db.insert(usersMigratorTable).values({ name: 'John', email: 'email' });
 
-	const result = await db.select().from(usersMigratorTable);
+  const result = await db.select().from(usersMigratorTable);
 
-	assert.deepEqual(result, [{ id: 1, name: 'John', email: 'email' }]);
+  assert.deepEqual(result, [{ id: 1, name: 'John', email: 'email' }]);
 
-	await db.execute(sql`drop table all_columns`);
-	await db.execute(sql`drop table "buplic".users12`);
-	await db.execute(sql`drop schema if exists drizzle cascade`);
+  await db.execute(sql`drop table all_columns`);
+  await db.execute(sql`drop table "buplic".users12`);
+  await db.execute(sql`drop schema if exists drizzle cascade`);
 });
 
 test('migrator : migrate with custom schema', async () => {
-	const { db } = ctx;
-	const customSchema = randomString();
-	await db.execute(sql`drop table if exists all_columns`);
-	await db.execute(sql`drop table if exists "buplic".users12`);
-	await db.execute(sql`drop schema if exists drizzle cascade`);
-	await db.execute(sql`drop schema if exists ${sql.identifier(customSchema)} cascade`);
+  const { db } = ctx;
+  const customSchema = randomString();
+  await db.execute(sql`drop table if exists all_columns`);
+  await db.execute(sql`drop table if exists "buplic".users12`);
+  await db.execute(sql`drop schema if exists drizzle cascade`);
+  await db.execute(
+    sql`drop schema if exists ${sql.identifier(customSchema)} cascade`
+  );
 
-	await migrate(db, { migrationsFolder:'./test/drizzle2/pg', migrationsSchema: customSchema });
+  await migrate(db, {
+    migrationsFolder: './test/drizzle2/pg',
+    migrationsSchema: customSchema,
+  });
 
-	// test if the custom migrations table was created
-	const rows = await db.execute(sql`select * from ${sql.identifier(customSchema)}."__drizzle_migrations";`);
+  // test if the custom migrations table was created
+  const rows = await db.execute(
+    sql`select * from ${sql.identifier(customSchema)}."__drizzle_migrations";`
+  );
   assert.ok(rows.length! > 0);
 
-	const sequences = await db.execute<{ sequencename: string }>(
-		sql`select sequencename from pg_catalog.pg_sequences where schemaname = ${customSchema} and sequencename = '__drizzle_migrations_id_seq'`,
-	);
-	assert.equal(sequences.length, 1);
+  const sequences = await db.execute<{ sequencename: string }>(
+    sql`select sequencename from pg_catalog.pg_sequences where schemaname = ${customSchema} and sequencename = '__drizzle_migrations_id_seq'`
+  );
+  assert.equal(sequences.length, 1);
 
-	// test if the migrated table are working as expected
-	await db.insert(usersMigratorTable).values({ id: 12, name: 'John', email: 'email' });
-	const result = await db.select().from(usersMigratorTable);
-	assert.deepEqual(result, [{ id: 12, name: 'John', email: 'email' }]);
+  // test if the migrated table are working as expected
+  await db
+    .insert(usersMigratorTable)
+    .values({ id: 12, name: 'John', email: 'email' });
+  const result = await db.select().from(usersMigratorTable);
+  assert.deepEqual(result, [{ id: 12, name: 'John', email: 'email' }]);
 
-	await db.execute(sql`drop table all_columns`);
-	await db.execute(sql`drop table "buplic".users12`);
-	await db.execute(sql`drop schema if exists ${sql.identifier(customSchema)} cascade`);
+  await db.execute(sql`drop table all_columns`);
+  await db.execute(sql`drop table "buplic".users12`);
+  await db.execute(
+    sql`drop schema if exists ${sql.identifier(customSchema)} cascade`
+  );
 });
 
 test('migrator : migrate with custom table', async () => {
-	const { db } = ctx;
-	const customTable = randomString();
-	await db.execute(sql`drop table if exists all_columns`);
-	await db.execute(sql`drop table if exists "buplic".users12`);
-	await db.execute(sql`drop schema if exists drizzle cascade`);
+  const { db } = ctx;
+  const customTable = randomString();
+  await db.execute(sql`drop table if exists all_columns`);
+  await db.execute(sql`drop table if exists "buplic".users12`);
+  await db.execute(sql`drop schema if exists drizzle cascade`);
 
-	await migrate(db, { migrationsFolder: './test/drizzle2/pg', migrationsTable: customTable });
+  await migrate(db, {
+    migrationsFolder: './test/drizzle2/pg',
+    migrationsTable: customTable,
+  });
 
-	// test if the custom migrations table was created
-	const rows = await db.execute(sql`select * from "drizzle".${sql.identifier(customTable)};`);
+  // test if the custom migrations table was created
+  const rows = await db.execute(
+    sql`select * from "drizzle".${sql.identifier(customTable)};`
+  );
   assert.ok(rows.length! > 0);
 
-	const sequences = await db.execute<{ sequencename: string }>(
-		sql`select sequencename from pg_catalog.pg_sequences where schemaname = 'drizzle' and sequencename = ${`${customTable}_id_seq`}`,
-	);
-	assert.equal(sequences.length, 1);
+  const sequences = await db.execute<{ sequencename: string }>(
+    sql`select sequencename from pg_catalog.pg_sequences where schemaname = 'drizzle' and sequencename = ${`${customTable}_id_seq`}`
+  );
+  assert.equal(sequences.length, 1);
 
-	// test if the migrated table are working as expected
-	await db.insert(usersMigratorTable).values({ id: 1, name: 'John', email: 'email' });
-	const result = await db.select().from(usersMigratorTable);
-	assert.deepEqual(result, [{ id: 1, name: 'John', email: 'email' }]);
+  // test if the migrated table are working as expected
+  await db
+    .insert(usersMigratorTable)
+    .values({ id: 1, name: 'John', email: 'email' });
+  const result = await db.select().from(usersMigratorTable);
+  assert.deepEqual(result, [{ id: 1, name: 'John', email: 'email' }]);
 
-	await db.execute(sql`drop table all_columns`);
-	await db.execute(sql`drop table "buplic".users12`);
-	await db.execute(sql`drop schema if exists drizzle cascade`);
+  await db.execute(sql`drop table all_columns`);
+  await db.execute(sql`drop table "buplic".users12`);
+  await db.execute(sql`drop schema if exists drizzle cascade`);
 });
 
 test('migrator : migrate with custom table and custom schema', async () => {
-	const { db } = ctx;
-	const customTable = randomString();
-	const customSchema = randomString();
-	await db.execute(sql`drop table if exists all_columns`);
-	await db.execute(sql`drop table if exists "buplic".users12`);
-	await db.execute(sql`drop schema if exists drizzle cascade`);
-	await db.execute(sql`drop schema if exists ${sql.identifier(customSchema)} cascade`);
+  const { db } = ctx;
+  const customTable = randomString();
+  const customSchema = randomString();
+  await db.execute(sql`drop table if exists all_columns`);
+  await db.execute(sql`drop table if exists "buplic".users12`);
+  await db.execute(sql`drop schema if exists drizzle cascade`);
+  await db.execute(
+    sql`drop schema if exists ${sql.identifier(customSchema)} cascade`
+  );
 
-	await migrate(db, {
-		migrationsFolder: './test/drizzle2/pg',
-		migrationsTable: customTable,
-		migrationsSchema: customSchema,
-	});
+  await migrate(db, {
+    migrationsFolder: './test/drizzle2/pg',
+    migrationsTable: customTable,
+    migrationsSchema: customSchema,
+  });
 
-	// test if the custom migrations table was created
-	const rows = await db.execute(
-		sql`select * from ${sql.identifier(customSchema)}.${sql.identifier(customTable)};`,
-	);
+  // test if the custom migrations table was created
+  const rows = await db.execute(
+    sql`select * from ${sql.identifier(customSchema)}.${sql.identifier(customTable)};`
+  );
   assert.ok(rows.length! > 0);
 
-	const sequences = await db.execute<{ sequencename: string }>(
-		sql`select sequencename from pg_catalog.pg_sequences where schemaname = ${customSchema} and sequencename = ${`${customTable}_id_seq`}`,
-	);
-	assert.equal(sequences.length, 1);
+  const sequences = await db.execute<{ sequencename: string }>(
+    sql`select sequencename from pg_catalog.pg_sequences where schemaname = ${customSchema} and sequencename = ${`${customTable}_id_seq`}`
+  );
+  assert.equal(sequences.length, 1);
 
-	// test if the migrated table are working as expected
-	await db.insert(usersMigratorTable).values({ id: 1, name: 'John', email: 'email' });
-	const result = await db.select().from(usersMigratorTable);
-	assert.deepEqual(result, [{ id: 1, name: 'John', email: 'email' }]);
+  // test if the migrated table are working as expected
+  await db
+    .insert(usersMigratorTable)
+    .values({ id: 1, name: 'John', email: 'email' });
+  const result = await db.select().from(usersMigratorTable);
+  assert.deepEqual(result, [{ id: 1, name: 'John', email: 'email' }]);
 
-	await db.execute(sql`drop table all_columns`);
-	await db.execute(sql`drop table "buplic".users12`);
-	await db.execute(sql`drop schema if exists ${sql.identifier(customSchema)} cascade`);
+  await db.execute(sql`drop table all_columns`);
+  await db.execute(sql`drop table "buplic".users12`);
+  await db.execute(
+    sql`drop schema if exists ${sql.identifier(customSchema)} cascade`
+  );
 });
 
 test('insert via db.execute + select via db.execute', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.execute(
-		sql`insert into ${usersTable} (${sql.identifier(usersTable.id.name)}, ${sql.identifier(usersTable.name.name)}) values (${1}, ${'John'})`,
-	);
+  await db.execute(
+    sql`insert into ${usersTable} (${sql.identifier(usersTable.id.name)}, ${sql.identifier(usersTable.name.name)}) values (${1}, ${'John'})`
+  );
 
-	const result = await db.execute<{ id: number; name: string }>(
-		sql`select id, name from "buplic"."users"`,
-	);
-	assert.deepEqual(result, [{ id: 1, name: 'John' }]);
+  const result = await db.execute<{ id: number; name: string }>(
+    sql`select id, name from "buplic"."users"`
+  );
+  assert.deepEqual(result, [{ id: 1, name: 'John' }]);
 });
 
 test('insert via db.execute + returning', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const inserted = await db.execute<{ id: number; name: string }>(
-		sql`insert into ${usersTable} (
+  const inserted = await db.execute<{ id: number; name: string }>(
+    sql`insert into ${usersTable} (
       ${sql.identifier(usersTable.id.name)},
       ${sql.identifier(usersTable.name.name)}
-    ) values (${501}, ${'John'}) returning ${usersTable.id}, ${usersTable.name}`,
-	);
-	assert.deepEqual(inserted, [{ id: 501, name: 'John' }]);
+    ) values (${501}, ${'John'}) returning ${usersTable.id}, ${usersTable.name}`
+  );
+  assert.deepEqual(inserted, [{ id: 501, name: 'John' }]);
 });
 
 test('insert via db.execute w/ query builder', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const inserted = await db.execute<Pick<typeof usersTable.$inferSelect, 'id' | 'name'>>(
-		db
-			.insert(usersTable)
-			.values({ name: 'John' })
-			.returning({ id: usersTable.id, name: usersTable.name }),
-	);
-	assert.deepEqual(inserted, [{ id: 1, name: 'John' }]);
+  const inserted = await db.execute<
+    Pick<typeof usersTable.$inferSelect, 'id' | 'name'>
+  >(
+    db
+      .insert(usersTable)
+      .values({ name: 'John' })
+      .returning({ id: usersTable.id, name: usersTable.name })
+  );
+  assert.deepEqual(inserted, [{ id: 1, name: 'John' }]);
 });
 
 test('Query check: Insert all defaults in 1 row', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('users', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		name: text('name').default('Dan'),
-		state: text('state'),
-	});
+  const users = publicSchema.table('users', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    name: text('name').default('Dan'),
+    state: text('state'),
+  });
 
-	const query = db
-		.insert(users)
-		.values({})
-		.toSQL();
+  const query = db.insert(users).values({}).toSQL();
 
-	assert.deepEqual(query, {
-		sql: 'insert into "buplic"."users" ("id", "name", "state") values (default, default, default)',
-		params: [],
-	});
+  assert.deepEqual(query, {
+    sql: 'insert into "buplic"."users" ("id", "name", "state") values (default, default, default)',
+    params: [],
+  });
 });
 
 test('Query check: Insert all defaults in multiple rows', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('users', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		name: text('name').default('Dan'),
-		state: text('state').default('UA'),
-	});
+  const users = publicSchema.table('users', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    name: text('name').default('Dan'),
+    state: text('state').default('UA'),
+  });
 
-	const query = db
-		.insert(users)
-		.values([{}, {}])
-		.toSQL();
+  const query = db.insert(users).values([{}, {}]).toSQL();
 
-	assert.deepEqual(query, {
-		sql: 'insert into "buplic"."users" ("id", "name", "state") values (default, default, default), (default, default, default)',
-		params: [],
-	});
+  assert.deepEqual(query, {
+    sql: 'insert into "buplic"."users" ("id", "name", "state") values (default, default, default), (default, default, default)',
+    params: [],
+  });
 });
 
 test('Insert all defaults in 1 row', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('empty_insert_single', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		name: text('name').default('Dan'),
-		state: text('state'),
-	});
+  const users = publicSchema.table('empty_insert_single', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    name: text('name').default('Dan'),
+    state: text('state'),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(sql`drop table if exists ${users}`);
 
-	await db.execute(
-		sql`create table ${users} (id integer primary key default 1, name text default 'Dan', state text)`,
-	);
+  await db.execute(
+    sql`create table ${users} (id integer primary key default 1, name text default 'Dan', state text)`
+  );
 
-	await db.insert(users).values({});
+  await db.insert(users).values({});
 
-	const res = await db.select().from(users);
+  const res = await db.select().from(users);
 
-	assert.deepEqual(res, [{ id: 1, name: 'Dan', state: null }]);
+  assert.deepEqual(res, [{ id: 1, name: 'Dan', state: null }]);
 });
 
 test('Insert all defaults in multiple rows', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('empty_insert_multiple', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		name: text('name').default('Dan'),
-		state: text('state'),
-	});
+  const users = publicSchema.table('empty_insert_multiple', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    name: text('name').default('Dan'),
+    state: text('state'),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(sql`drop table if exists ${users}`);
 
-	await db.execute(
-		sql`create table ${users} (id integer primary key default nextval('serial'), name text default 'Dan', state text)`,
-	);
+  await db.execute(
+    sql`create table ${users} (id integer primary key default nextval('serial'), name text default 'Dan', state text)`
+  );
 
-	await db.insert(users).values([{}, {}]);
+  await db.insert(users).values([{}, {}]);
 
-	const res = await db.select().from(users);
+  const res = await db.select().from(users);
 
-	assert.deepEqual(res, [{ id: 1, name: 'Dan', state: null }, { id: 2, name: 'Dan', state: null }]);
+  assert.deepEqual(res, [
+    { id: 1, name: 'Dan', state: null },
+    { id: 2, name: 'Dan', state: null },
+  ]);
 });
 
 test('build query insert with onConflict do update', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const query = db
-		.insert(usersTable)
-		.values({ name: 'John' })
-		.onConflictDoUpdate({ target: usersTable.id, set: { name: 'John1' } })
-		.toSQL();
+  const query = db
+    .insert(usersTable)
+    .values({ name: 'John' })
+    .onConflictDoUpdate({ target: usersTable.id, set: { name: 'John1' } })
+    .toSQL();
 
-	assert.deepEqual(query, {
-		sql:
-			'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict ("id") do update set "name" = $2',
-		params: ['John', 'John1'],
-	});
+  assert.deepEqual(query, {
+    sql: 'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict ("id") do update set "name" = $2',
+    params: ['John', 'John1'],
+  });
 });
 
 test('build query insert with onConflict do update / multiple columns', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const query = db
-		.insert(usersTable)
-		.values({ name: 'John' })
-		.onConflictDoUpdate({ target: [usersTable.id, usersTable.name], set: { name: 'John1' } })
-		.toSQL();
+  const query = db
+    .insert(usersTable)
+    .values({ name: 'John' })
+    .onConflictDoUpdate({
+      target: [usersTable.id, usersTable.name],
+      set: { name: 'John1' },
+    })
+    .toSQL();
 
-	assert.deepEqual(query, {
-		sql:
-			'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict ("id","name") do update set "name" = $2',
-		params: ['John', 'John1'],
-	});
+  assert.deepEqual(query, {
+    sql: 'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict ("id","name") do update set "name" = $2',
+    params: ['John', 'John1'],
+  });
 });
 
 test('build query insert with onConflict do nothing', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const query = db
-		.insert(usersTable)
-		.values({ name: 'John' })
-		.onConflictDoNothing()
-		.toSQL();
+  const query = db
+    .insert(usersTable)
+    .values({ name: 'John' })
+    .onConflictDoNothing()
+    .toSQL();
 
-	assert.deepEqual(query, {
-		sql:
-			'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict do nothing',
-		params: ['John'],
-	});
+  assert.deepEqual(query, {
+    sql: 'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict do nothing',
+    params: ['John'],
+  });
 });
 
 test('build query insert with onConflict do nothing + target', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const query = db
-		.insert(usersTable)
-		.values({ name: 'John' })
-		.onConflictDoNothing({ target: usersTable.id })
-		.toSQL();
+  const query = db
+    .insert(usersTable)
+    .values({ name: 'John' })
+    .onConflictDoNothing({ target: usersTable.id })
+    .toSQL();
 
-	assert.deepEqual(query, {
-		sql:
-			'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict ("id") do nothing',
-		params: ['John'],
-	});
+  assert.deepEqual(query, {
+    sql: 'insert into "buplic"."users" ("id", "name", "verified", "created_at") values (default, $1, default, default) on conflict ("id") do nothing',
+    params: ['John'],
+  });
 });
 
 test('insert with onConflict do update', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
+  await db.insert(usersTable).values({ name: 'John' });
 
-	await db
-		.insert(usersTable)
-		.values({ id: 1, name: 'John' })
-		.onConflictDoUpdate({ target: usersTable.id, set: { name: 'John1' } });
+  await db
+    .insert(usersTable)
+    .values({ id: 1, name: 'John' })
+    .onConflictDoUpdate({ target: usersTable.id, set: { name: 'John1' } });
 
-	const res = await db
-		.select({ id: usersTable.id, name: usersTable.name })
-		.from(usersTable)
-		.where(eq(usersTable.id, 1));
+  const res = await db
+    .select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, 1));
 
-	assert.deepEqual(res, [{ id: 1, name: 'John1' }]);
+  assert.deepEqual(res, [{ id: 1, name: 'John1' }]);
 });
 
 test('insert with onConflict do nothing', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
+  await db.insert(usersTable).values({ name: 'John' });
 
-	await db.insert(usersTable).values({ id: 1, name: 'John' }).onConflictDoNothing();
+  await db
+    .insert(usersTable)
+    .values({ id: 1, name: 'John' })
+    .onConflictDoNothing();
 
-	const res = await db
-		.select({ id: usersTable.id, name: usersTable.name })
-		.from(usersTable)
-		.where(eq(usersTable.id, 1));
+  const res = await db
+    .select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, 1));
 
-	assert.deepEqual(res, [{ id: 1, name: 'John' }]);
+  assert.deepEqual(res, [{ id: 1, name: 'John' }]);
 });
 
 test('insert with onConflict do nothing + target', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values({ name: 'John' });
+  await db.insert(usersTable).values({ name: 'John' });
 
-	await db
-		.insert(usersTable)
-		.values({ id: 1, name: 'John' })
-		.onConflictDoNothing({ target: usersTable.id });
+  await db
+    .insert(usersTable)
+    .values({ id: 1, name: 'John' })
+    .onConflictDoNothing({ target: usersTable.id });
 
-	const res = await db
-		.select({ id: usersTable.id, name: usersTable.name })
-		.from(usersTable)
-		.where(eq(usersTable.id, 1));
+  const res = await db
+    .select({ id: usersTable.id, name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, 1));
 
-	assert.deepEqual(res, [{ id: 1, name: 'John' }]);
+  assert.deepEqual(res, [{ id: 1, name: 'John' }]);
 });
 
 // TODO: automatically alias fields in select, especially (or only?) for joins
 test('left join (flat object fields)', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const { id: cityId } = await db
-		.insert(citiesTable)
-		.values([{ name: 'Paris' }, { name: 'London' }])
-		.returning({ id: citiesTable.id })
-		.then((rows) => rows[0]!);
+  const { id: cityId } = await db
+    .insert(citiesTable)
+    .values([{ name: 'Paris' }, { name: 'London' }])
+    .returning({ id: citiesTable.id })
+    .then((rows) => rows[0]!);
 
-	await db.insert(users2Table).values([{ name: 'John', cityId }, { name: 'Jane' }]);
+  await db
+    .insert(users2Table)
+    .values([{ name: 'John', cityId }, { name: 'Jane' }]);
 
   const selectPartial = db
-		.select({
-			userId: users2Table.id,
-			userName: users2Table.name,
-			cityId: citiesTable.id,
-			cityName: citiesTable.name,
-		})
-		.from(users2Table)
+    .select({
+      userId: users2Table.id,
+      userName: users2Table.name,
+      cityId: citiesTable.id,
+      cityName: citiesTable.name,
+    })
+    .from(users2Table);
 
-	const res = await selectPartial
-		.leftJoin(citiesTable, eq(users2Table.cityId, citiesTable.id));
+  const res = await selectPartial.leftJoin(
+    citiesTable,
+    eq(users2Table.cityId, citiesTable.id)
+  );
 
-	assert.deepEqual(res, [
-		{ userId: 1, userName: 'John', cityId, cityName: 'Paris' },
-		{ userId: 2, userName: 'Jane', cityId: null, cityName: null },
-	]);
+  assert.deepEqual(res, [
+    { userId: 1, userName: 'John', cityId, cityName: 'Paris' },
+    { userId: 2, userName: 'Jane', cityId: null, cityName: null },
+  ]);
 });
 
 test('left join (grouped fields)', async () => {
@@ -1537,7 +1693,9 @@ test('left join (grouped fields)', async () => {
     .returning({ id: citiesTable.id })
     .then((rows) => rows[0]!);
 
-  await db.insert(users2Table).values([{ name: 'John', cityId }, { name: 'Jane' }]);
+  await db
+    .insert(users2Table)
+    .values([{ name: 'John', cityId }, { name: 'Jane' }]);
 
   const res = await db
     .select({
@@ -1570,43 +1728,49 @@ test('left join (grouped fields)', async () => {
 });
 
 test('left join (all fields)', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const { id: cityId } = await db
-		.insert(citiesTable)
-		.values([{ id: 1, name: 'Paris' }, { id: 2, name: 'London' }])
-		.returning({ id: citiesTable.id })
-		.then((rows) => rows[0]!);
+  const { id: cityId } = await db
+    .insert(citiesTable)
+    .values([
+      { id: 1, name: 'Paris' },
+      { id: 2, name: 'London' },
+    ])
+    .returning({ id: citiesTable.id })
+    .then((rows) => rows[0]!);
 
-	await db.insert(users2Table).values([{ id: 1, name: 'John', cityId }, { id: 2, name: 'Jane' }]);
+  await db.insert(users2Table).values([
+    { id: 1, name: 'John', cityId },
+    { id: 2, name: 'Jane' },
+  ]);
 
-	const res = await db
-		.select()
-		.from(users2Table)
-		.leftJoin(citiesTable, eq(users2Table.cityId, citiesTable.id));
+  const res = await db
+    .select()
+    .from(users2Table)
+    .leftJoin(citiesTable, eq(users2Table.cityId, citiesTable.id));
 
-	assert.deepEqual(res, [
-		{
-			users2: {
-				id: 1,
-				name: 'John',
-				cityId,
-			},
-			cities: {
-				id: cityId,
-				name: 'Paris',
-				state: null,
-			},
-		},
-		{
-			users2: {
-				id: 2,
-				name: 'Jane',
-				cityId: null,
-			},
-			cities: null,
-		},
-	]);
+  assert.deepEqual(res, [
+    {
+      users2: {
+        id: 1,
+        name: 'John',
+        cityId,
+      },
+      cities: {
+        id: cityId,
+        name: 'Paris',
+        state: null,
+      },
+    },
+    {
+      users2: {
+        id: 2,
+        name: 'Jane',
+        cityId: null,
+      },
+      cities: null,
+    },
+  ]);
 });
 
 test('join subquery (partial)', async () => {
@@ -1778,122 +1942,135 @@ test('join subquery', async () => {
 });
 
 test('with ... select', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(orders).values([
-		{ region: 'Europe', product: 'A', amount: 10, quantity: 1 },
-		{ region: 'Europe', product: 'A', amount: 20, quantity: 2 },
-		{ region: 'Europe', product: 'B', amount: 20, quantity: 2 },
-		{ region: 'Europe', product: 'B', amount: 30, quantity: 3 },
-		{ region: 'US', product: 'A', amount: 30, quantity: 3 },
-		{ region: 'US', product: 'A', amount: 40, quantity: 4 },
-		{ region: 'US', product: 'B', amount: 40, quantity: 4 },
-		{ region: 'US', product: 'B', amount: 50, quantity: 5 },
-	]);
+  await db.insert(orders).values([
+    { region: 'Europe', product: 'A', amount: 10, quantity: 1 },
+    { region: 'Europe', product: 'A', amount: 20, quantity: 2 },
+    { region: 'Europe', product: 'B', amount: 20, quantity: 2 },
+    { region: 'Europe', product: 'B', amount: 30, quantity: 3 },
+    { region: 'US', product: 'A', amount: 30, quantity: 3 },
+    { region: 'US', product: 'A', amount: 40, quantity: 4 },
+    { region: 'US', product: 'B', amount: 40, quantity: 4 },
+    { region: 'US', product: 'B', amount: 50, quantity: 5 },
+  ]);
 
-	const regionalSales = db
-		.$with('regional_sales')
-		.as(
-			db
-				.select({
-					region: orders.region,
-					totalSales: sql<number>`sum(${orders.amount})`.as('total_sales'),
-				})
-				.from(orders)
-				.groupBy(orders.region),
-		);
+  const regionalSales = db.$with('regional_sales').as(
+    db
+      .select({
+        region: orders.region,
+        totalSales: sql<number>`sum(${orders.amount})`.as('total_sales'),
+      })
+      .from(orders)
+      .groupBy(orders.region)
+  );
 
-	const topRegions = db
-		.$with('top_regions')
-		.as(
-			db
-				.select({
-					region: regionalSales.region,
-				})
-				.from(regionalSales)
-				.where(
-					gt(
-						regionalSales.totalSales,
-						db.select({ sales: sql`sum(${regionalSales.totalSales})/10` }).from(regionalSales),
-					),
-				),
-		);
+  const topRegions = db.$with('top_regions').as(
+    db
+      .select({
+        region: regionalSales.region,
+      })
+      .from(regionalSales)
+      .where(
+        gt(
+          regionalSales.totalSales,
+          db
+            .select({ sales: sql`sum(${regionalSales.totalSales})/10` })
+            .from(regionalSales)
+        )
+      )
+  );
 
-	const result1 = await db
-		.with(regionalSales, topRegions)
-		.select({
-			region: orders.region,
-			product: orders.product,
-			productUnits: sql<number>`sum(${orders.quantity})::int`,
-			productSales: sql<number>`sum(${orders.amount})::int`,
-		})
-		.from(orders)
-		.where(inArray(orders.region, db.select({ region: topRegions.region }).from(topRegions)))
-		.groupBy(orders.region, orders.product)
-		.orderBy(orders.region, orders.product);
-	const result2 = await db
-		.with(regionalSales, topRegions)
-		.selectDistinct({
-			region: orders.region,
-			product: orders.product,
-			productUnits: sql<number>`sum(${orders.quantity})::int`,
-			productSales: sql<number>`sum(${orders.amount})::int`,
-		})
-		.from(orders)
-		.where(inArray(orders.region, db.select({ region: topRegions.region }).from(topRegions)))
-		.groupBy(orders.region, orders.product)
-		.orderBy(orders.region, orders.product);
-	const result3 = await db
-		.with(regionalSales, topRegions)
-		.selectDistinctOn([orders.region], {
-			region: orders.region,
-			productUnits: sql<number>`sum(${orders.quantity})::int`,
-			productSales: sql<number>`sum(${orders.amount})::int`,
-		})
-		.from(orders)
-		.where(inArray(orders.region, db.select({ region: topRegions.region }).from(topRegions)))
-		.groupBy(orders.region)
-		.orderBy(orders.region);
+  const result1 = await db
+    .with(regionalSales, topRegions)
+    .select({
+      region: orders.region,
+      product: orders.product,
+      productUnits: sql<number>`sum(${orders.quantity})::int`,
+      productSales: sql<number>`sum(${orders.amount})::int`,
+    })
+    .from(orders)
+    .where(
+      inArray(
+        orders.region,
+        db.select({ region: topRegions.region }).from(topRegions)
+      )
+    )
+    .groupBy(orders.region, orders.product)
+    .orderBy(orders.region, orders.product);
+  const result2 = await db
+    .with(regionalSales, topRegions)
+    .selectDistinct({
+      region: orders.region,
+      product: orders.product,
+      productUnits: sql<number>`sum(${orders.quantity})::int`,
+      productSales: sql<number>`sum(${orders.amount})::int`,
+    })
+    .from(orders)
+    .where(
+      inArray(
+        orders.region,
+        db.select({ region: topRegions.region }).from(topRegions)
+      )
+    )
+    .groupBy(orders.region, orders.product)
+    .orderBy(orders.region, orders.product);
+  const result3 = await db
+    .with(regionalSales, topRegions)
+    .selectDistinctOn([orders.region], {
+      region: orders.region,
+      productUnits: sql<number>`sum(${orders.quantity})::int`,
+      productSales: sql<number>`sum(${orders.amount})::int`,
+    })
+    .from(orders)
+    .where(
+      inArray(
+        orders.region,
+        db.select({ region: topRegions.region }).from(topRegions)
+      )
+    )
+    .groupBy(orders.region)
+    .orderBy(orders.region);
 
-	assert.deepEqual(result1, [
-		{
-			region: 'Europe',
-			product: 'A',
-			productUnits: 3,
-			productSales: 30,
-		},
-		{
-			region: 'Europe',
-			product: 'B',
-			productUnits: 5,
-			productSales: 50,
-		},
-		{
-			region: 'US',
-			product: 'A',
-			productUnits: 7,
-			productSales: 70,
-		},
-		{
-			region: 'US',
-			product: 'B',
-			productUnits: 9,
-			productSales: 90,
-		},
-	]);
-	assert.deepEqual(result2, result1);
-	assert.deepEqual(result3, [
-		{
-			region: 'Europe',
-			productUnits: 8,
-			productSales: 80,
-		},
-		{
-			region: 'US',
-			productUnits: 16,
-			productSales: 160,
-		},
-	]);
+  assert.deepEqual(result1, [
+    {
+      region: 'Europe',
+      product: 'A',
+      productUnits: 3,
+      productSales: 30,
+    },
+    {
+      region: 'Europe',
+      product: 'B',
+      productUnits: 5,
+      productSales: 50,
+    },
+    {
+      region: 'US',
+      product: 'A',
+      productUnits: 7,
+      productSales: 70,
+    },
+    {
+      region: 'US',
+      product: 'B',
+      productUnits: 9,
+      productSales: 90,
+    },
+  ]);
+  assert.deepEqual(result2, result1);
+  assert.deepEqual(result3, [
+    {
+      region: 'Europe',
+      productUnits: 8,
+      productSales: 80,
+    },
+    {
+      region: 'US',
+      productUnits: 16,
+      productSales: 160,
+    },
+  ]);
 });
 
 test('with ... update', async () => {
@@ -1951,582 +2128,693 @@ test('with ... update', async () => {
 });
 
 test('with ... insert', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('users', {
-		username: text('username').notNull(),
-		admin: boolean('admin').notNull(),
-	});
+  const users = publicSchema.table('users', {
+    username: text('username').notNull(),
+    admin: boolean('admin').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
-	await db.execute(sql`create table ${users} (username text not null, admin boolean not null default false)`);
+  await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(
+    sql`create table ${users} (username text not null, admin boolean not null default false)`
+  );
 
-	const userCount = db
-		.$with('user_count')
-		.as(
-			db
-				.select({
-					value: sql`count(*)`.as('value'),
-				})
-				.from(users),
-		);
+  const userCount = db.$with('user_count').as(
+    db
+      .select({
+        value: sql`count(*)`.as('value'),
+      })
+      .from(users)
+  );
 
-	const result = await db
-		.with(userCount)
-		.insert(users)
-		.values([
-			{ username: 'user1', admin: sql`((select * from ${userCount}) = 0)` },
-		])
-		.returning({
-			admin: users.admin,
-		});
+  const result = await db
+    .with(userCount)
+    .insert(users)
+    .values([
+      { username: 'user1', admin: sql`((select * from ${userCount}) = 0)` },
+    ])
+    .returning({
+      admin: users.admin,
+    });
 
-	assert.deepEqual(result, [{ admin: true }]);
+  assert.deepEqual(result, [{ admin: true }]);
 });
 
 test('with ... delete', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(orders).values([
-		{ region: 'Europe', product: 'A', amount: 10, quantity: 1 },
-		{ region: 'Europe', product: 'A', amount: 20, quantity: 2 },
-		{ region: 'Europe', product: 'B', amount: 20, quantity: 2 },
-		{ region: 'Europe', product: 'B', amount: 30, quantity: 3 },
-		{ region: 'US', product: 'A', amount: 30, quantity: 3 },
-		{ region: 'US', product: 'A', amount: 40, quantity: 4 },
-		{ region: 'US', product: 'B', amount: 40, quantity: 4 },
-		{ region: 'US', product: 'B', amount: 50, quantity: 5 },
-	]);
+  await db.insert(orders).values([
+    { region: 'Europe', product: 'A', amount: 10, quantity: 1 },
+    { region: 'Europe', product: 'A', amount: 20, quantity: 2 },
+    { region: 'Europe', product: 'B', amount: 20, quantity: 2 },
+    { region: 'Europe', product: 'B', amount: 30, quantity: 3 },
+    { region: 'US', product: 'A', amount: 30, quantity: 3 },
+    { region: 'US', product: 'A', amount: 40, quantity: 4 },
+    { region: 'US', product: 'B', amount: 40, quantity: 4 },
+    { region: 'US', product: 'B', amount: 50, quantity: 5 },
+  ]);
 
-	const averageAmount = db
-		.$with('average_amount')
-		.as(
-			db
-				.select({
-					value: sql`avg(${orders.amount})`.as('value'),
-				})
-				.from(orders),
-		);
+  const averageAmount = db.$with('average_amount').as(
+    db
+      .select({
+        value: sql`avg(${orders.amount})`.as('value'),
+      })
+      .from(orders)
+  );
 
-	const result = await db
-		.with(averageAmount)
-		.delete(orders)
-		.where(gt(orders.amount, sql`(select * from ${averageAmount})`))
-		.returning({
-			id: orders.id,
-		});
+  const result = await db
+    .with(averageAmount)
+    .delete(orders)
+    .where(gt(orders.amount, sql`(select * from ${averageAmount})`))
+    .returning({
+      id: orders.id,
+    });
 
-	assert.deepEqual(result, [
-		{ id: 6 },
-		{ id: 7 },
-		{ id: 8 },
-	]);
+  assert.deepEqual(result, [{ id: 6 }, { id: 7 }, { id: 8 }]);
 });
 
 test('select from subquery sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(users2Table).values([{ name: 'John' }, { name: 'Jane' }]);
+  await db.insert(users2Table).values([{ name: 'John' }, { name: 'Jane' }]);
 
-	const sq = db
-		.select({ name: sql<string>`${users2Table.name} || ' modified'`.as('name') })
-		.from(users2Table)
-		.as('sq');
+  const sq = db
+    .select({
+      name: sql<string>`${users2Table.name} || ' modified'`.as('name'),
+    })
+    .from(users2Table)
+    .as('sq');
 
-	const res = await db.select({ name: sq.name }).from(sq);
+  const res = await db.select({ name: sq.name }).from(sq);
 
-	assert.deepEqual(res, [{ name: 'John modified' }, { name: 'Jane modified' }]);
+  assert.deepEqual(res, [{ name: 'John modified' }, { name: 'Jane modified' }]);
 });
 
 // DuckDB happily binds the column even if the table isn't joined; ensure query runs.
 test('select a field without joining its table', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const query = db.select({ name: users2Table.name }).from(usersTable);
+  const query = db.select({ name: users2Table.name }).from(usersTable);
 
-	expect(() => query.prepare('query')).not.toThrow();
-	const result = await db.select({ name: users2Table.name }).from(usersTable);
-	assert(Array.isArray(result));
+  expect(() => query.prepare('query')).not.toThrow();
+  const result = await db.select({ name: users2Table.name }).from(usersTable);
+  assert(Array.isArray(result));
 });
 
 // DuckDB will bind and execute subqueries without forcing aliases.
 test('select all fields from subquery without alias', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const sq = db.$with('sq').as(db.select({ name: sql<string>`upper(${users2Table.name})` }).from(users2Table));
+  const sq = db
+    .$with('sq')
+    .as(
+      db
+        .select({ name: sql<string>`upper(${users2Table.name})` })
+        .from(users2Table)
+    );
 
-	const query = db.with(sq).select().from(sq);
+  const query = db.with(sq).select().from(sq);
 
-	expect(() => query.prepare('query')).not.toThrow();
-	const result = await db.with(sq).select().from(sq);
-	assert(Array.isArray(result));
+  expect(() => query.prepare('query')).not.toThrow();
+  const result = await db.with(sq).select().from(sq);
+  assert(Array.isArray(result));
 });
 
 test('select count()', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }]);
+  await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }]);
 
-	const res = await db.select({ count: sql<BigInt>`count(*)` }).from(usersTable);
+  const res = await db
+    .select({ count: sql<BigInt>`count(*)` })
+    .from(usersTable);
 
-	assert.deepEqual(res, [{ count: 2n }]);
+  assert.deepEqual(res, [{ count: 2n }]);
 });
 
 test('select count w/ custom mapper', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	function count(value: PgColumn | SQLWrapper): SQL<number>;
-	function count(value: PgColumn | SQLWrapper, alias: string): SQL.Aliased<number>;
-	function count(value: PgColumn | SQLWrapper, alias?: string): SQL<number> | SQL.Aliased<number> {
-		const result = sql`count(${value})`.mapWith(Number);
-		if (!alias) {
-			return result;
-		}
-		return result.as(alias);
-	}
+  function count(value: PgColumn | SQLWrapper): SQL<number>;
+  function count(
+    value: PgColumn | SQLWrapper,
+    alias: string
+  ): SQL.Aliased<number>;
+  function count(
+    value: PgColumn | SQLWrapper,
+    alias?: string
+  ): SQL<number> | SQL.Aliased<number> {
+    const result = sql`count(${value})`.mapWith(Number);
+    if (!alias) {
+      return result;
+    }
+    return result.as(alias);
+  }
 
-	await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }]);
+  await db.insert(usersTable).values([{ name: 'John' }, { name: 'Jane' }]);
 
-	const res = await db.select({ count: count(sql`*`) }).from(usersTable);
+  const res = await db.select({ count: count(sql`*`) }).from(usersTable);
 
-	assert.deepEqual(res, [{ count: 2 }]);
+  assert.deepEqual(res, [{ count: 2 }]);
 });
 
 // adapt to DuckDB version
 test('network types', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	// Create the network table - requires DuckDB inet extension
-	try {
-		await db.execute(
-			sql`
+  // Create the network table - requires DuckDB inet extension
+  try {
+    await db.execute(
+      sql`
 				create table if not exists buplic.network_table (
 					inet inet not null
 				)
 			`
-		);
-	} catch (err) {
-		// Skip if inet extension is not available (e.g., in offline environments)
-		const message = err instanceof Error ? err.message : String(err);
-		if (message.includes('inet') || message.includes('extension')) {
-			console.log('Skipping network types test: inet extension not available');
-			return;
-		}
-		throw err;
-	}
+    );
+  } catch (err) {
+    // Skip if inet extension is not available (e.g., in offline environments)
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('inet') || message.includes('extension')) {
+      console.log('Skipping network types test: inet extension not available');
+      return;
+    }
+    throw err;
+  }
 
-	const value: typeof network.$inferSelect = {
-		inet: '127.0.0.1',
-	};
+  const value: typeof network.$inferSelect = {
+    inet: '127.0.0.1',
+  };
 
-	await db.insert(network).values(value);
+  await db.insert(network).values(value);
 
-	const res = await db.select().from(network);
+  const res = await db.select().from(network);
 
-	assert.deepEqual(res, [value]);
+  assert.deepEqual(res, [value]);
 });
 
 // todo: DuckDB native types
 test('array types', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const values: typeof salEmp.$inferSelect[] = [
-		{
-			name: 'John',
-			payByQuarter: [10000, 10000, 10000, 10000],
-			schedule: [['meeting', 'lunch'], ['training', 'presentation']],
-		},
-		{
-			name: 'Carol',
-			payByQuarter: [20000, 25000, 25000, 25000],
-			schedule: [['breakfast', 'consulting'], ['meeting', 'lunch']],
-		},
-	];
+  const values: (typeof salEmp.$inferSelect)[] = [
+    {
+      name: 'John',
+      payByQuarter: [10000, 10000, 10000, 10000],
+      schedule: [
+        ['meeting', 'lunch'],
+        ['training', 'presentation'],
+      ],
+    },
+    {
+      name: 'Carol',
+      payByQuarter: [20000, 25000, 25000, 25000],
+      schedule: [
+        ['breakfast', 'consulting'],
+        ['meeting', 'lunch'],
+      ],
+    },
+  ];
 
-	await db.insert(salEmp).values(values);
+  await db.insert(salEmp).values(values);
 
-	const res = await db.select().from(salEmp);
+  const res = await db.select().from(salEmp);
 
-	assert.deepEqual(res, values);
+  assert.deepEqual(res, values);
 });
 
 test('having', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	await db.insert(citiesTable).values([{ name: 'London' }, { name: 'Paris' }, { name: 'New York' }]);
+  await db
+    .insert(citiesTable)
+    .values([{ name: 'London' }, { name: 'Paris' }, { name: 'New York' }]);
 
-	await db.insert(users2Table).values([{ name: 'John', cityId: 1 }, { name: 'Jane', cityId: 1 }, {
-		name: 'Jack',
-		cityId: 2,
-	}]);
+  await db.insert(users2Table).values([
+    { name: 'John', cityId: 1 },
+    { name: 'Jane', cityId: 1 },
+    {
+      name: 'Jack',
+      cityId: 2,
+    },
+  ]);
 
-	const result = await db
-			.select({
-				id: citiesTable.id,
+  const result = await db
+    .select({
+      id: citiesTable.id,
       // needs to be wrapped in any_value if value isn't aggregated
-				name: sql<string>`any_value(upper(${citiesTable.name}))`,
-				usersCount: sql<number>`count(${users2Table.id})::int`,
-			})
-			.from(citiesTable)
-			.leftJoin(users2Table, eq(users2Table.cityId, citiesTable.id))
-			.where(() => sql`length(${citiesTable.name}) >= 3`)
-			.groupBy(citiesTable.id)
-	    // wass goin on here
-			.having(({ usersCount }) => sql`${usersCount} > 0`)
-			.orderBy(({ name }) => name);
+      name: sql<string>`any_value(upper(${citiesTable.name}))`,
+      usersCount: sql<number>`count(${users2Table.id})::int`,
+    })
+    .from(citiesTable)
+    .leftJoin(users2Table, eq(users2Table.cityId, citiesTable.id))
+    .where(() => sql`length(${citiesTable.name}) >= 3`)
+    .groupBy(citiesTable.id)
+    // wass goin on here
+    .having(({ usersCount }) => sql`${usersCount} > 0`)
+    .orderBy(({ name }) => name);
 
-	assert.deepEqual(result, [
-		{
-			id: 1,
-			name: 'LONDON',
-			usersCount: 2,
-		},
-		{
-			id: 2,
-			name: 'PARIS',
-			usersCount: 1,
-		},
-	]);
+  assert.deepEqual(result, [
+    {
+      id: 1,
+      name: 'LONDON',
+      usersCount: 2,
+    },
+    {
+      id: 2,
+      name: 'PARIS',
+      usersCount: 1,
+    },
+  ]);
 });
 
 test('view', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const newYorkers1 = pgView('new_yorkers')
-		.as((qb) => qb.select().from(users2Table).where(eq(users2Table.cityId, 1)));
+  const newYorkers1 = pgView('new_yorkers').as((qb) =>
+    qb.select().from(users2Table).where(eq(users2Table.cityId, 1))
+  );
 
-	const newYorkers2 = pgView('new_yorkers', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		cityId: integer('city_id').notNull(),
-	}).as(sql`select * from ${users2Table} where ${eq(users2Table.cityId, 1)}`);
+  const newYorkers2 = pgView('new_yorkers', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+    cityId: integer('city_id').notNull(),
+  }).as(sql`select * from ${users2Table} where ${eq(users2Table.cityId, 1)}`);
 
-	const newYorkers3 = pgView('new_yorkers', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		cityId: integer('city_id').notNull(),
-	}).existing();
+  const newYorkers3 = pgView('new_yorkers', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+    cityId: integer('city_id').notNull(),
+  }).existing();
 
-	await db.execute(sql`create view ${newYorkers1} as ${getViewConfig(newYorkers1).query}`);
+  await db.execute(
+    sql`create view ${newYorkers1} as ${getViewConfig(newYorkers1).query}`
+  );
 
-	await db.insert(citiesTable).values([{ name: 'New York' }, { name: 'Paris' }]);
+  await db
+    .insert(citiesTable)
+    .values([{ name: 'New York' }, { name: 'Paris' }]);
 
-	await db.insert(users2Table).values([
-		{ name: 'John', cityId: 1 },
-		{ name: 'Jane', cityId: 1 },
-		{ name: 'Jack', cityId: 2 },
-	]);
+  await db.insert(users2Table).values([
+    { name: 'John', cityId: 1 },
+    { name: 'Jane', cityId: 1 },
+    { name: 'Jack', cityId: 2 },
+  ]);
 
-	{
-		const result = await db.select().from(newYorkers1);
-		assert.deepEqual(result, [
-			{ id: 1, name: 'John', cityId: 1 },
-			{ id: 2, name: 'Jane', cityId: 1 },
-		]);
-	}
+  {
+    const result = await db.select().from(newYorkers1);
+    assert.deepEqual(result, [
+      { id: 1, name: 'John', cityId: 1 },
+      { id: 2, name: 'Jane', cityId: 1 },
+    ]);
+  }
 
-	{
-		const result = await db.select().from(newYorkers2);
-		assert.deepEqual(result, [
-			{ id: 1, name: 'John', cityId: 1 },
-			{ id: 2, name: 'Jane', cityId: 1 },
-		]);
-	}
+  {
+    const result = await db.select().from(newYorkers2);
+    assert.deepEqual(result, [
+      { id: 1, name: 'John', cityId: 1 },
+      { id: 2, name: 'Jane', cityId: 1 },
+    ]);
+  }
 
-	{
-		const result = await db.select().from(newYorkers3);
-		assert.deepEqual(result, [
-			{ id: 1, name: 'John', cityId: 1 },
-			{ id: 2, name: 'Jane', cityId: 1 },
-		]);
-	}
+  {
+    const result = await db.select().from(newYorkers3);
+    assert.deepEqual(result, [
+      { id: 1, name: 'John', cityId: 1 },
+      { id: 2, name: 'Jane', cityId: 1 },
+    ]);
+  }
 
-	{
-		const result = await db.select({ name: newYorkers1.name }).from(newYorkers1);
-		assert.deepEqual(result, [
-			{ name: 'John' },
-			{ name: 'Jane' },
-		]);
-	}
+  {
+    const result = await db
+      .select({ name: newYorkers1.name })
+      .from(newYorkers1);
+    assert.deepEqual(result, [{ name: 'John' }, { name: 'Jane' }]);
+  }
 
-	await db.execute(sql`drop view ${newYorkers1}`);
+  await db.execute(sql`drop view ${newYorkers1}`);
 });
 
 // Unfortunately DuckDB doesn't have this feature (yet?)
 test('materialized view', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const newYorkers1 = pgMaterializedView('new_yorkers')
-		.as((qb) => qb.select().from(users2Table).where(eq(users2Table.cityId, 1)));
+  const newYorkers1 = pgMaterializedView('new_yorkers').as((qb) =>
+    qb.select().from(users2Table).where(eq(users2Table.cityId, 1))
+  );
 
-	const newYorkers2 = pgMaterializedView('new_yorkers', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		cityId: integer('city_id').notNull(),
-	}).as(sql`select * from ${users2Table} where ${eq(users2Table.cityId, 1)}`);
+  const newYorkers2 = pgMaterializedView('new_yorkers', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+    cityId: integer('city_id').notNull(),
+  }).as(sql`select * from ${users2Table} where ${eq(users2Table.cityId, 1)}`);
 
-	const newYorkers3 = pgMaterializedView('new_yorkers', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		cityId: integer('city_id').notNull(),
-	}).existing();
+  const newYorkers3 = pgMaterializedView('new_yorkers', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+    cityId: integer('city_id').notNull(),
+  }).existing();
 
-	let viewErr = false;
-	try {
-		await db.execute(sql`create materialized view ${newYorkers1} as ${getMaterializedViewConfig(newYorkers1).query}`);
-	} catch {
-		viewErr = true;
-	}
-	assert(viewErr);
-	return;
-	return;
+  let viewErr = false;
+  try {
+    await db.execute(
+      sql`create materialized view ${newYorkers1} as ${getMaterializedViewConfig(newYorkers1).query}`
+    );
+  } catch {
+    viewErr = true;
+  }
+  assert(viewErr);
+  return;
+  return;
 
-	await db.execute(sql`create materialized view ${newYorkers1} as ${getMaterializedViewConfig(newYorkers1).query}`);
+  await db.execute(
+    sql`create materialized view ${newYorkers1} as ${getMaterializedViewConfig(newYorkers1).query}`
+  );
 
-	await db.insert(citiesTable).values([{ name: 'New York' }, { name: 'Paris' }]);
+  await db
+    .insert(citiesTable)
+    .values([{ name: 'New York' }, { name: 'Paris' }]);
 
-	await db.insert(users2Table).values([
-		{ name: 'John', cityId: 1 },
-		{ name: 'Jane', cityId: 1 },
-		{ name: 'Jack', cityId: 2 },
-	]);
+  await db.insert(users2Table).values([
+    { name: 'John', cityId: 1 },
+    { name: 'Jane', cityId: 1 },
+    { name: 'Jack', cityId: 2 },
+  ]);
 
-	{
-		const result = await db.select().from(newYorkers1);
-		assert.deepEqual(result, []);
-	}
+  {
+    const result = await db.select().from(newYorkers1);
+    assert.deepEqual(result, []);
+  }
 
-	await db.refreshMaterializedView(newYorkers1);
+  await db.refreshMaterializedView(newYorkers1);
 
-	{
-		const result = await db.select().from(newYorkers1);
-		assert.deepEqual(result, [
-			{ id: 1, name: 'John', cityId: 1 },
-			{ id: 2, name: 'Jane', cityId: 1 },
-		]);
-	}
+  {
+    const result = await db.select().from(newYorkers1);
+    assert.deepEqual(result, [
+      { id: 1, name: 'John', cityId: 1 },
+      { id: 2, name: 'Jane', cityId: 1 },
+    ]);
+  }
 
-	{
-		const result = await db.select().from(newYorkers2);
-		assert.deepEqual(result, [
-			{ id: 1, name: 'John', cityId: 1 },
-			{ id: 2, name: 'Jane', cityId: 1 },
-		]);
-	}
+  {
+    const result = await db.select().from(newYorkers2);
+    assert.deepEqual(result, [
+      { id: 1, name: 'John', cityId: 1 },
+      { id: 2, name: 'Jane', cityId: 1 },
+    ]);
+  }
 
-	{
-		const result = await db.select().from(newYorkers3);
-		assert.deepEqual(result, [
-			{ id: 1, name: 'John', cityId: 1 },
-			{ id: 2, name: 'Jane', cityId: 1 },
-		]);
-	}
+  {
+    const result = await db.select().from(newYorkers3);
+    assert.deepEqual(result, [
+      { id: 1, name: 'John', cityId: 1 },
+      { id: 2, name: 'Jane', cityId: 1 },
+    ]);
+  }
 
-	{
-		const result = await db.select({ name: newYorkers1.name }).from(newYorkers1);
-		assert.deepEqual(result, [
-			{ name: 'John' },
-			{ name: 'Jane' },
-		]);
-	}
+  {
+    const result = await db
+      .select({ name: newYorkers1.name })
+      .from(newYorkers1);
+    assert.deepEqual(result, [{ name: 'John' }, { name: 'Jane' }]);
+  }
 
-	await db.execute(sql`drop materialized view ${newYorkers1}`);
+  await db.execute(sql`drop materialized view ${newYorkers1}`);
 });
 
 test('select from raw sql', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const result = await db.select({
-		id: sql<number>`id`,
-		name: sql<string>`name`,
-	}).from(sql`(select 1 as id, 'John' as name) as users`);
+  const result = await db
+    .select({
+      id: sql<number>`id`,
+      name: sql<string>`name`,
+    })
+    .from(sql`(select 1 as id, 'John' as name) as users`);
 
-	Expect<Equal<{ id: number; name: string }[], typeof result>>;
+  Expect<Equal<{ id: number; name: string }[], typeof result>>;
 
-	assert.deepEqual(result, [
-		{ id: 1, name: 'John' },
-	]);
+  assert.deepEqual(result, [{ id: 1, name: 'John' }]);
 });
 
 test('select from raw sql with joins', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const result = await db
-		.select({
-			id: sql<number>`users.id`,
-			name: sql<string>`users.name`,
-			userCity: sql<string>`users.city`,
-			cityName: sql<string>`cities.name`,
-		})
-		.from(sql`(select 1 as id, 'John' as name, 'New York' as city) as users`)
-		.leftJoin(sql`(select 1 as id, 'Paris' as name) as cities`, sql`cities.id = users.id`);
+  const result = await db
+    .select({
+      id: sql<number>`users.id`,
+      name: sql<string>`users.name`,
+      userCity: sql<string>`users.city`,
+      cityName: sql<string>`cities.name`,
+    })
+    .from(sql`(select 1 as id, 'John' as name, 'New York' as city) as users`)
+    .leftJoin(
+      sql`(select 1 as id, 'Paris' as name) as cities`,
+      sql`cities.id = users.id`
+    );
 
-	Expect<Equal<{ id: number; name: string; userCity: string; cityName: string }[], typeof result>>;
+  Expect<
+    Equal<
+      { id: number; name: string; userCity: string; cityName: string }[],
+      typeof result
+    >
+  >;
 
-	assert.deepEqual(result, [
-		{ id: 1, name: 'John', userCity: 'New York', cityName: 'Paris' },
-	]);
+  assert.deepEqual(result, [
+    { id: 1, name: 'John', userCity: 'New York', cityName: 'Paris' },
+  ]);
 });
 
 test('join on aliased sql from select', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const result = await db
-		.select({
-			userId: sql<number>`users.id`.as('userId'),
-			name: sql<string>`users.name`,
-			userCity: sql<string>`users.city`,
-			cityId: sql<number>`cities.id`.as('cityId'),
-			cityName: sql<string>`cities.name`,
-		})
-		.from(sql`(select 1 as id, 'John' as name, 'New York' as city) as users`)
-		.leftJoin(sql`(select 1 as id, 'Paris' as name) as cities`, (cols) => eq(cols.cityId, cols.userId));
+  const result = await db
+    .select({
+      userId: sql<number>`users.id`.as('userId'),
+      name: sql<string>`users.name`,
+      userCity: sql<string>`users.city`,
+      cityId: sql<number>`cities.id`.as('cityId'),
+      cityName: sql<string>`cities.name`,
+    })
+    .from(sql`(select 1 as id, 'John' as name, 'New York' as city) as users`)
+    .leftJoin(sql`(select 1 as id, 'Paris' as name) as cities`, (cols) =>
+      eq(cols.cityId, cols.userId)
+    );
 
-	Expect<Equal<{ userId: number; name: string; userCity: string; cityId: number; cityName: string }[], typeof result>>;
+  Expect<
+    Equal<
+      {
+        userId: number;
+        name: string;
+        userCity: string;
+        cityId: number;
+        cityName: string;
+      }[],
+      typeof result
+    >
+  >;
 
-	assert.deepEqual(result, [
-		{ userId: 1, name: 'John', userCity: 'New York', cityId: 1, cityName: 'Paris' },
-	]);
+  assert.deepEqual(result, [
+    {
+      userId: 1,
+      name: 'John',
+      userCity: 'New York',
+      cityId: 1,
+      cityName: 'Paris',
+    },
+  ]);
 });
 
 test('join on aliased sql from with clause', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = db.$with('users').as(
-		db.select({
-			id: sql<number>`id`.as('userId'),
-			name: sql<string>`name`.as('userName'),
-			city: sql<string>`city`.as('city'),
-		}).from(
-			sql`(select 1 as id, 'John' as name, 'New York' as city) as users`,
-		),
-	);
+  const users = db.$with('users').as(
+    db
+      .select({
+        id: sql<number>`id`.as('userId'),
+        name: sql<string>`name`.as('userName'),
+        city: sql<string>`city`.as('city'),
+      })
+      .from(sql`(select 1 as id, 'John' as name, 'New York' as city) as users`)
+  );
 
-	const cities = db.$with('cities').as(
-		db.select({
-			id: sql<number>`id`.as('cityId'),
-			name: sql<string>`name`.as('cityName'),
-		}).from(
-			sql`(select 1 as id, 'Paris' as name) as cities`,
-		),
-	);
+  const cities = db.$with('cities').as(
+    db
+      .select({
+        id: sql<number>`id`.as('cityId'),
+        name: sql<string>`name`.as('cityName'),
+      })
+      .from(sql`(select 1 as id, 'Paris' as name) as cities`)
+  );
 
-	const result = await db
-		.with(users, cities)
-		.select({
-			userId: users.id,
-			name: users.name,
-			userCity: users.city,
-			cityId: cities.id,
-			cityName: cities.name,
-		})
-		.from(users)
-		.leftJoin(cities, (cols) => eq(cols.cityId, cols.userId));
+  const result = await db
+    .with(users, cities)
+    .select({
+      userId: users.id,
+      name: users.name,
+      userCity: users.city,
+      cityId: cities.id,
+      cityName: cities.name,
+    })
+    .from(users)
+    .leftJoin(cities, (cols) => eq(cols.cityId, cols.userId));
 
-	Expect<Equal<{ userId: number; name: string; userCity: string; cityId: number; cityName: string }[], typeof result>>;
+  Expect<
+    Equal<
+      {
+        userId: number;
+        name: string;
+        userCity: string;
+        cityId: number;
+        cityName: string;
+      }[],
+      typeof result
+    >
+  >;
 
-	assert.deepEqual(result, [
-		{ userId: 1, name: 'John', userCity: 'New York', cityId: 1, cityName: 'Paris' },
-	]);
+  assert.deepEqual(result, [
+    {
+      userId: 1,
+      name: 'John',
+      userCity: 'New York',
+      cityId: 1,
+      cityName: 'Paris',
+    },
+  ]);
 });
 
 test('prefixed table', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const pgTable = pgTableCreator((name) => `myprefix_${name}`);
+  const pgTable = pgTableCreator((name) => `myprefix_${name}`);
 
-	const users = pgTable('test_prefixed_table_with_unique_name', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-	});
+  const users = pgTable('test_prefixed_table_with_unique_name', {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(sql`drop table if exists ${users}`);
 
-	await db.execute(
-		sql`create table myprefix_test_prefixed_table_with_unique_name (id integer not null primary key, name text not null)`,
-	);
+  await db.execute(
+    sql`create table myprefix_test_prefixed_table_with_unique_name (id integer not null primary key, name text not null)`
+  );
 
-	await db.insert(users).values({ id: 1, name: 'John' });
+  await db.insert(users).values({ id: 1, name: 'John' });
 
-	const result = await db.select().from(users);
+  const result = await db.select().from(users);
 
-	assert.deepEqual(result, [{ id: 1, name: 'John' }]);
+  assert.deepEqual(result, [{ id: 1, name: 'John' }]);
 
-	await db.execute(sql`drop table ${users}`);
+  await db.execute(sql`drop table ${users}`);
 });
 
 // todo: Will need DuckDB types!
 test('select from enum', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const muscleEnum = pgEnum('muscle', [
-		'abdominals',
-		'hamstrings',
-		'adductors',
-		'quadriceps',
-		'biceps',
-		'shoulders',
-		'chest',
-		'middle_back',
-		'calves',
-		'glutes',
-		'lower_back',
-		'lats',
-		'triceps',
-		'traps',
-		'forearms',
-		'neck',
-		'abductors',
-	]);
+  const muscleEnum = pgEnum('muscle', [
+    'abdominals',
+    'hamstrings',
+    'adductors',
+    'quadriceps',
+    'biceps',
+    'shoulders',
+    'chest',
+    'middle_back',
+    'calves',
+    'glutes',
+    'lower_back',
+    'lats',
+    'triceps',
+    'traps',
+    'forearms',
+    'neck',
+    'abductors',
+  ]);
 
-	const forceEnum = pgEnum('force', ['isometric', 'isotonic', 'isokinetic']);
+  const forceEnum = pgEnum('force', ['isometric', 'isotonic', 'isokinetic']);
 
-	const levelEnum = pgEnum('level', ['beginner', 'intermediate', 'advanced']);
+  const levelEnum = pgEnum('level', ['beginner', 'intermediate', 'advanced']);
 
-	const mechanicEnum = pgEnum('mechanic', ['compound', 'isolation']);
+  const mechanicEnum = pgEnum('mechanic', ['compound', 'isolation']);
 
-	const equipmentEnum = pgEnum('equipment', ['barbell', 'dumbbell', 'bodyweight', 'machine', 'cable', 'kettlebell']);
+  const equipmentEnum = pgEnum('equipment', [
+    'barbell',
+    'dumbbell',
+    'bodyweight',
+    'machine',
+    'cable',
+    'kettlebell',
+  ]);
 
-	const categoryEnum = pgEnum('category', ['upper_body', 'lower_body', 'full_body']);
+  const categoryEnum = pgEnum('category', [
+    'upper_body',
+    'lower_body',
+    'full_body',
+  ]);
 
-	const exercises = publicSchema.table('exercises', {
-		id: integer('id').primaryKey(),
-		name: varchar('name').notNull(),
-		force: forceEnum('force'),
-		level: levelEnum('level'),
-		mechanic: mechanicEnum('mechanic'),
-		equipment: equipmentEnum('equipment'),
-		instructions: text('instructions'),
-		category: categoryEnum('category'),
-		primaryMuscles: muscleEnum('primary_muscles').array(),
-		secondaryMuscles: muscleEnum('secondary_muscles').array(),
-		createdAt: timestamp('created_at').notNull().default(sql`now()`),
-		updatedAt: timestamp('updated_at').notNull().default(sql`now()`),
-	});
+  const exercises = publicSchema.table('exercises', {
+    id: integer('id').primaryKey(),
+    name: varchar('name').notNull(),
+    force: forceEnum('force'),
+    level: levelEnum('level'),
+    mechanic: mechanicEnum('mechanic'),
+    equipment: equipmentEnum('equipment'),
+    instructions: text('instructions'),
+    category: categoryEnum('category'),
+    primaryMuscles: muscleEnum('primary_muscles').array(),
+    secondaryMuscles: muscleEnum('secondary_muscles').array(),
+    createdAt: timestamp('created_at')
+      .notNull()
+      .default(sql`now()`),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .default(sql`now()`),
+  });
 
-	await db.execute(sql`drop table if exists ${exercises}`);
-	await db.execute(sql`drop type if exists ${sql.identifier(muscleEnum.enumName)}`);
-	await db.execute(sql`drop type if exists ${sql.identifier(forceEnum.enumName)}`);
-	await db.execute(sql`drop type if exists ${sql.identifier(levelEnum.enumName)}`);
-	await db.execute(sql`drop type if exists ${sql.identifier(mechanicEnum.enumName)}`);
-	await db.execute(sql`drop type if exists ${sql.identifier(equipmentEnum.enumName)}`);
-	await db.execute(sql`drop type if exists ${sql.identifier(categoryEnum.enumName)}`);
+  await db.execute(sql`drop table if exists ${exercises}`);
+  await db.execute(
+    sql`drop type if exists ${sql.identifier(muscleEnum.enumName)}`
+  );
+  await db.execute(
+    sql`drop type if exists ${sql.identifier(forceEnum.enumName)}`
+  );
+  await db.execute(
+    sql`drop type if exists ${sql.identifier(levelEnum.enumName)}`
+  );
+  await db.execute(
+    sql`drop type if exists ${sql.identifier(mechanicEnum.enumName)}`
+  );
+  await db.execute(
+    sql`drop type if exists ${sql.identifier(equipmentEnum.enumName)}`
+  );
+  await db.execute(
+    sql`drop type if exists ${sql.identifier(categoryEnum.enumName)}`
+  );
 
-	await db.execute(
-		sql`create type ${
-			sql.identifier(muscleEnum.enumName)
-		} as enum ('abdominals', 'hamstrings', 'adductors', 'quadriceps', 'biceps', 'shoulders', 'chest', 'middle_back', 'calves', 'glutes', 'lower_back', 'lats', 'triceps', 'traps', 'forearms', 'neck', 'abductors')`,
-	);
-	await db.execute(sql`create type ${sql.identifier(forceEnum.enumName)} as enum ('isometric', 'isotonic', 'isokinetic')`);
-	await db.execute(sql`create type ${sql.identifier(levelEnum.enumName)} as enum ('beginner', 'intermediate', 'advanced')`);
-	await db.execute(sql`create type ${sql.identifier(mechanicEnum.enumName)} as enum ('compound', 'isolation')`);
-	await db.execute(
-		sql`create type ${
-			sql.identifier(equipmentEnum.enumName)
-		} as enum ('barbell', 'dumbbell', 'bodyweight', 'machine', 'cable', 'kettlebell')`,
-	);
-	await db.execute(sql`create type ${sql.identifier(categoryEnum.enumName)} as enum ('upper_body', 'lower_body', 'full_body')`);
-	await db.execute(sql`
+  await db.execute(
+    sql`create type ${sql.identifier(
+      muscleEnum.enumName
+    )} as enum ('abdominals', 'hamstrings', 'adductors', 'quadriceps', 'biceps', 'shoulders', 'chest', 'middle_back', 'calves', 'glutes', 'lower_back', 'lats', 'triceps', 'traps', 'forearms', 'neck', 'abductors')`
+  );
+  await db.execute(
+    sql`create type ${sql.identifier(forceEnum.enumName)} as enum ('isometric', 'isotonic', 'isokinetic')`
+  );
+  await db.execute(
+    sql`create type ${sql.identifier(levelEnum.enumName)} as enum ('beginner', 'intermediate', 'advanced')`
+  );
+  await db.execute(
+    sql`create type ${sql.identifier(mechanicEnum.enumName)} as enum ('compound', 'isolation')`
+  );
+  await db.execute(
+    sql`create type ${sql.identifier(
+      equipmentEnum.enumName
+    )} as enum ('barbell', 'dumbbell', 'bodyweight', 'machine', 'cable', 'kettlebell')`
+  );
+  await db.execute(
+    sql`create type ${sql.identifier(categoryEnum.enumName)} as enum ('upper_body', 'lower_body', 'full_body')`
+  );
+  await db.execute(sql`
 		create table ${exercises} (
 			id integer primary key,
 			name varchar not null,
@@ -2543,68 +2831,76 @@ test('select from enum', async () => {
 		)
 	`);
 
-	await db.insert(exercises).values({
+  await db.insert(exercises).values({
     id: 1,
-		name: 'Bench Press',
-		force: 'isotonic',
-		level: 'beginner',
-		mechanic: 'compound',
-		equipment: 'barbell',
-		instructions:
-			'Lie on your back on a flat bench. Grasp the barbell with an overhand grip, slightly wider than shoulder width. Unrack the barbell and hold it over you with your arms locked. Lower the barbell to your chest. Press the barbell back to the starting position.',
-		category: 'upper_body',
-		primaryMuscles: ['chest', 'triceps'],
-		secondaryMuscles: ['shoulders', 'traps'],
-	});
+    name: 'Bench Press',
+    force: 'isotonic',
+    level: 'beginner',
+    mechanic: 'compound',
+    equipment: 'barbell',
+    instructions:
+      'Lie on your back on a flat bench. Grasp the barbell with an overhand grip, slightly wider than shoulder width. Unrack the barbell and hold it over you with your arms locked. Lower the barbell to your chest. Press the barbell back to the starting position.',
+    category: 'upper_body',
+    primaryMuscles: ['chest', 'triceps'],
+    secondaryMuscles: ['shoulders', 'traps'],
+  });
 
-	const result = await db.select().from(exercises);
+  const result = await db.select().from(exercises);
 
-	assert.deepEqual(result, [
-		{
-			id: 1,
-			name: 'Bench Press',
-			force: 'isotonic',
-			level: 'beginner',
-			mechanic: 'compound',
-			equipment: 'barbell',
-			instructions:
-				'Lie on your back on a flat bench. Grasp the barbell with an overhand grip, slightly wider than shoulder width. Unrack the barbell and hold it over you with your arms locked. Lower the barbell to your chest. Press the barbell back to the starting position.',
-			category: 'upper_body',
-			primaryMuscles: ['chest', 'triceps'],
-			secondaryMuscles: ['shoulders', 'traps'],
-			createdAt: result[0]!.createdAt,
-			updatedAt: result[0]!.updatedAt,
-		},
-	]);
+  assert.deepEqual(result, [
+    {
+      id: 1,
+      name: 'Bench Press',
+      force: 'isotonic',
+      level: 'beginner',
+      mechanic: 'compound',
+      equipment: 'barbell',
+      instructions:
+        'Lie on your back on a flat bench. Grasp the barbell with an overhand grip, slightly wider than shoulder width. Unrack the barbell and hold it over you with your arms locked. Lower the barbell to your chest. Press the barbell back to the starting position.',
+      category: 'upper_body',
+      primaryMuscles: ['chest', 'triceps'],
+      secondaryMuscles: ['shoulders', 'traps'],
+      createdAt: result[0]!.createdAt,
+      updatedAt: result[0]!.updatedAt,
+    },
+  ]);
 
-	await db.execute(sql`drop table ${exercises}`);
-	await db.execute(sql`drop type ${sql.identifier(muscleEnum.enumName)}`);
-	await db.execute(sql`drop type ${sql.identifier(forceEnum.enumName)}`);
-	await db.execute(sql`drop type ${sql.identifier(levelEnum.enumName)}`);
-	await db.execute(sql`drop type ${sql.identifier(mechanicEnum.enumName)}`);
-	await db.execute(sql`drop type ${sql.identifier(equipmentEnum.enumName)}`);
-	await db.execute(sql`drop type ${sql.identifier(categoryEnum.enumName)}`);
+  await db.execute(sql`drop table ${exercises}`);
+  await db.execute(sql`drop type ${sql.identifier(muscleEnum.enumName)}`);
+  await db.execute(sql`drop type ${sql.identifier(forceEnum.enumName)}`);
+  await db.execute(sql`drop type ${sql.identifier(levelEnum.enumName)}`);
+  await db.execute(sql`drop type ${sql.identifier(mechanicEnum.enumName)}`);
+  await db.execute(sql`drop type ${sql.identifier(equipmentEnum.enumName)}`);
+  await db.execute(sql`drop type ${sql.identifier(categoryEnum.enumName)}`);
 });
 
 // a lot of this works differently... todo: test date stuff?
 test('all date and time columns', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const table = publicSchema.table('all_columns', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		dateString: date('date_string').notNull(),
-		time: time('time').notNull(),
-		datetime: timestamp('datetime').notNull(),
-		datetimeWTZ: timestamp('datetime_wtz', { withTimezone: true }).notNull(),
-		datetimeString: timestamp('datetime_string', { mode: 'string' }).notNull(),
-		datetimeFullPrecision: timestamp('datetime_full_precision', { precision: 6, mode: 'string' }).notNull(),
-		datetimeWTZString: timestamp('datetime_wtz_string', { withTimezone: true, mode: 'string' }).notNull(),
-		interval: interval('interval').notNull(),
-	});
+  const table = publicSchema.table('all_columns', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    dateString: date('date_string').notNull(),
+    time: time('time').notNull(),
+    datetime: timestamp('datetime').notNull(),
+    datetimeWTZ: timestamp('datetime_wtz', { withTimezone: true }).notNull(),
+    datetimeString: timestamp('datetime_string', { mode: 'string' }).notNull(),
+    datetimeFullPrecision: timestamp('datetime_full_precision', {
+      precision: 6,
+      mode: 'string',
+    }).notNull(),
+    datetimeWTZString: timestamp('datetime_wtz_string', {
+      withTimezone: true,
+      mode: 'string',
+    }).notNull(),
+    interval: interval('interval').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 
-	await db.execute(sql`
+  await db.execute(sql`
 		create table ${table} (
 					id integer primary key default nextval('serial_users'),
 					date_string date not null,
@@ -2618,230 +2914,261 @@ test('all date and time columns', async () => {
 			)
 	`);
 
-	const someDatetime = new Date('2022-01-01T00:00:00.123Z');
-	const fullPrecision = '2022-01-01T00:00:00.123456Z';
-	const someTime = '23:23:12.432';
+  const someDatetime = new Date('2022-01-01T00:00:00.123Z');
+  const fullPrecision = '2022-01-01T00:00:00.123456Z';
+  const someTime = '23:23:12.432';
 
-	await db.insert(table).values({
-		dateString: '2022-01-01',
-		time: someTime,
-		datetime: someDatetime,
-		datetimeWTZ: someDatetime,
-		datetimeString: '2022-01-01T00:00:00.123Z',
-		datetimeFullPrecision: fullPrecision,
-		datetimeWTZString: '2022-01-01T00:00:00.123Z',
-		interval: '1 day',
-	});
+  await db.insert(table).values({
+    dateString: '2022-01-01',
+    time: someTime,
+    datetime: someDatetime,
+    datetimeWTZ: someDatetime,
+    datetimeString: '2022-01-01T00:00:00.123Z',
+    datetimeFullPrecision: fullPrecision,
+    datetimeWTZString: '2022-01-01T00:00:00.123Z',
+    interval: '1 day',
+  });
 
-	const result = await db.select().from(table);
+  const result = await db.select().from(table);
 
-	Expect<
-		Equal<{
-			id: number;
-			dateString: string;
-			time: string;
-			datetime: Date;
-			datetimeWTZ: Date;
-			datetimeString: string;
-			datetimeFullPrecision: string;
-			datetimeWTZString: string;
-			interval: string;
-		}[], typeof result>
-	>;
+  Expect<
+    Equal<
+      {
+        id: number;
+        dateString: string;
+        time: string;
+        datetime: Date;
+        datetimeWTZ: Date;
+        datetimeString: string;
+        datetimeFullPrecision: string;
+        datetimeWTZString: string;
+        interval: string;
+      }[],
+      typeof result
+    >
+  >;
 
-	Expect<
-		Equal<{
-			dateString: string;
-			time: string;
-			datetime: Date;
-			datetimeWTZ: Date;
-			datetimeString: string;
-			datetimeFullPrecision: string;
-			datetimeWTZString: string;
-			interval: string;
-			id?: number | undefined;
-		}, typeof table.$inferInsert>
-	>;
+  Expect<
+    Equal<
+      {
+        dateString: string;
+        time: string;
+        datetime: Date;
+        datetimeWTZ: Date;
+        datetimeString: string;
+        datetimeFullPrecision: string;
+        datetimeWTZString: string;
+        interval: string;
+        id?: number | undefined;
+      },
+      typeof table.$inferInsert
+    >
+  >;
 
-	const [row] = result;
-	const toDateStr = (val: unknown) =>
-		val instanceof Date ? val.toISOString().slice(0, 10) : String(val);
-	const toTimestampStr = (val: unknown) =>
-		val instanceof Date
-			? val.toISOString().replace('T', ' ').replace('Z', '')
-			: String(val);
-	const toTimeStr = (val: unknown) =>
-		val instanceof Date
-			? val.toISOString().split('T')[1]!.replace('Z', '')
-			: typeof val === 'bigint' || typeof val === 'number'
-				? new Date(Number(val) / 1000).toISOString().split('T')[1]!.replace('Z', '')
-				: String(val);
+  const [row] = result;
+  const toDateStr = (val: unknown) =>
+    val instanceof Date ? val.toISOString().slice(0, 10) : String(val);
+  const toTimestampStr = (val: unknown) =>
+    val instanceof Date
+      ? val.toISOString().replace('T', ' ').replace('Z', '')
+      : String(val);
+  const toTimeStr = (val: unknown) =>
+    val instanceof Date
+      ? val.toISOString().split('T')[1]!.replace('Z', '')
+      : typeof val === 'bigint' || typeof val === 'number'
+        ? new Date(Number(val) / 1000)
+            .toISOString()
+            .split('T')[1]!
+            .replace('Z', '')
+        : String(val);
 
-	assert(row);
-	assert.deepEqual(toDateStr(row.dateString), '2022-01-01');
-	assert.deepEqual(row.datetime instanceof Date ? row.datetime.getTime() : undefined, someDatetime.getTime());
-	assert.deepEqual(
-		row.datetimeWTZ instanceof Date ? row.datetimeWTZ.getTime() : undefined,
-		someDatetime.getTime(),
-	);
-	assert.deepEqual(toTimestampStr(row.datetimeString), '2022-01-01 00:00:00.123');
-	assert(toTimestampStr(row.datetimeFullPrecision).startsWith('2022-01-01 00:00:00.123'));
-	assert(toTimestampStr(row.datetimeWTZString).startsWith('2022-01-01 00:00:00.123'));
-	assert.deepEqual(toTimeStr(row.time).startsWith('23:23:12'), true);
+  assert(row);
+  assert.deepEqual(toDateStr(row.dateString), '2022-01-01');
+  assert.deepEqual(
+    row.datetime instanceof Date ? row.datetime.getTime() : undefined,
+    someDatetime.getTime()
+  );
+  assert.deepEqual(
+    row.datetimeWTZ instanceof Date ? row.datetimeWTZ.getTime() : undefined,
+    someDatetime.getTime()
+  );
+  assert.deepEqual(
+    toTimestampStr(row.datetimeString),
+    '2022-01-01 00:00:00.123'
+  );
+  assert(
+    toTimestampStr(row.datetimeFullPrecision).startsWith(
+      '2022-01-01 00:00:00.123'
+    )
+  );
+  assert(
+    toTimestampStr(row.datetimeWTZString).startsWith('2022-01-01 00:00:00.123')
+  );
+  assert.deepEqual(toTimeStr(row.time).startsWith('23:23:12'), true);
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 });
 
 test('all date and time columns with timezone second case mode date', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const table = publicSchema.table('all_columns', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		timestamp: timestamp('timestamp_string').notNull(),
-	});
+  const table = publicSchema.table('all_columns', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    timestamp: timestamp('timestamp_string').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 
-	await db.execute(sql`
+  await db.execute(sql`
 		create table ${table} (
 					id integer primary key default nextval('serial_users'),
 					timestamp_string timestamptz not null
 			)
 	`);
 
-	const insertedDate = new Date();
+  const insertedDate = new Date();
 
-	// 1. Insert date as new date
-	await db.insert(table).values([
-		{ timestamp: insertedDate },
-	]);
+  // 1. Insert date as new date
+  await db.insert(table).values([{ timestamp: insertedDate }]);
 
-	// 2, Select as date and check that timezones are the same
-	// There is no way to check timezone in Date object, as it is always represented internally in UTC
-	const result = await db.select().from(table);
+  // 2, Select as date and check that timezones are the same
+  // There is no way to check timezone in Date object, as it is always represented internally in UTC
+  const result = await db.select().from(table);
 
-	assert.deepEqual(result, [{ id: 1, timestamp: insertedDate }]);
+  assert.deepEqual(result, [{ id: 1, timestamp: insertedDate }]);
 
-	// 3. Compare both dates
-	assert.deepEqual(insertedDate.getTime(), result[0]?.timestamp.getTime());
+  // 3. Compare both dates
+  assert.deepEqual(insertedDate.getTime(), result[0]?.timestamp.getTime());
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 });
 
 test('all date and time columns with timezone third case mode date', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const table = publicSchema.table('all_columns', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		timestamp: timestamp('timestamp_string').notNull(),
-	});
+  const table = publicSchema.table('all_columns', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    timestamp: timestamp('timestamp_string').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 
-	await db.execute(sql`
+  await db.execute(sql`
 		create table ${table} (
 					id integer primary key default nextval('serial_users'),
 					timestamp_string timestamptz not null
 			)
 	`);
 
-	const insertedDate = new Date('2022-01-01 20:00:00.123-04'); // used different time zones, internally is still UTC
-	const insertedDate2 = new Date('2022-01-02 04:00:00.123+04'); // They are both the same date in different time zones
+  const insertedDate = new Date('2022-01-01 20:00:00.123-04'); // used different time zones, internally is still UTC
+  const insertedDate2 = new Date('2022-01-02 04:00:00.123+04'); // They are both the same date in different time zones
 
-	// 1. Insert date as new dates with different time zones
-	await db.insert(table).values([
-		{ timestamp: insertedDate },
-		{ timestamp: insertedDate2 },
-	]);
+  // 1. Insert date as new dates with different time zones
+  await db
+    .insert(table)
+    .values([{ timestamp: insertedDate }, { timestamp: insertedDate2 }]);
 
-	// 2, Select and compare both dates
-	const result = await db.select().from(table);
+  // 2, Select and compare both dates
+  const result = await db.select().from(table);
 
-	assert.deepEqual(result[0]?.timestamp.getTime(), result[1]?.timestamp.getTime());
+  assert.deepEqual(
+    result[0]?.timestamp.getTime(),
+    result[1]?.timestamp.getTime()
+  );
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 });
 
 test('all date and time columns without timezone first case mode string', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const table = publicSchema.table('all_columns', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		timestamp: timestamp('timestamp_string', { mode: 'string' }).notNull(),
-	});
+  const table = publicSchema.table('all_columns', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    timestamp: timestamp('timestamp_string', { mode: 'string' }).notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 
-	await db.execute(sql`
+  await db.execute(sql`
 		create table ${table} (
 					id integer primary key default nextval('serial_users'),
 					timestamp_string timestamp not null
 			)
 	`);
 
-	// 1. Insert date in string format without timezone in it
-	await db.insert(table).values([
-		{ timestamp: '2022-01-01 02:00:00.123456' },
-	]);
+  // 1. Insert date in string format without timezone in it
+  await db.insert(table).values([{ timestamp: '2022-01-01 02:00:00.123456' }]);
 
-	// 2, Select in string format and check that values are the same
-	const result = await db.select({ id: table.id, timestamp: sql`${table.timestamp}::string` }).from(table);
+  // 2, Select in string format and check that values are the same
+  const result = await db
+    .select({ id: table.id, timestamp: sql`${table.timestamp}::string` })
+    .from(table);
 
-	assert.deepEqual(result, [{ id: 1, timestamp: '2022-01-01 02:00:00.123456' }]);
+  assert.deepEqual(result, [
+    { id: 1, timestamp: '2022-01-01 02:00:00.123456' },
+  ]);
 
-	// 3. Select as raw query and check that values are the same
-	const result2 = await db.execute<{
-		id: number;
-		timestamp_string: string;
-	}>(sql`select * from ${table}`);
+  // 3. Select as raw query and check that values are the same
+  const result2 = await db.execute<{
+    id: number;
+    timestamp_string: string;
+  }>(sql`select * from ${table}`);
 
-	const ts2 = result2[0]?.timestamp_string;
-	const ts2String =
-		ts2 instanceof Date
-			? ts2.toISOString().replace('T', ' ')
-			: String(ts2 ?? '');
+  const ts2 = result2[0]?.timestamp_string;
+  const ts2String =
+    ts2 instanceof Date
+      ? ts2.toISOString().replace('T', ' ')
+      : String(ts2 ?? '');
 
-	assert(ts2String.startsWith('2022-01-01 02:00:00.123'));
+  assert(ts2String.startsWith('2022-01-01 02:00:00.123'));
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 });
 
 test('all date and time columns without timezone second case mode string', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const table = publicSchema.table('all_columns', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		timestamp: timestamp('timestamp_string', { mode: 'string' }).notNull(),
-	});
+  const table = publicSchema.table('all_columns', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    timestamp: timestamp('timestamp_string', { mode: 'string' }).notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 
-	await db.execute(sql`
+  await db.execute(sql`
 		create table ${table} (
 					id integer primary key default nextval('serial_users'),
 					timestamp_string timestamp not null
 			)
 	`);
 
-	// 1. Insert date in string format with timezone in it
-	await db.insert(table).values([
-		{ timestamp: '2022-01-01T02:00:00.123456-02' },
-	]);
+  // 1. Insert date in string format with timezone in it
+  await db
+    .insert(table)
+    .values([{ timestamp: '2022-01-01T02:00:00.123456-02' }]);
 
-	// 2, Select as raw query and check that values are the same
-	const result = await db.execute<{
-		id: number;
-		timestamp_string: string;
-	}>(sql`select * from ${table}`);
+  // 2, Select as raw query and check that values are the same
+  const result = await db.execute<{
+    id: number;
+    timestamp_string: string;
+  }>(sql`select * from ${table}`);
 
-	const normalized = result[0]?.timestamp_string;
-	const normalizedString =
-		normalized instanceof Date
-			? normalized.toISOString().replace('T', ' ')
-			: String(normalized ?? '');
-	assert(normalizedString.startsWith('2022-01-01 02:00:00.123'));
+  const normalized = result[0]?.timestamp_string;
+  const normalizedString =
+    normalized instanceof Date
+      ? normalized.toISOString().replace('T', ' ')
+      : String(normalized ?? '');
+  assert(normalizedString.startsWith('2022-01-01 02:00:00.123'));
 
-	await db.execute(sql`drop table ${table}`);
+  await db.execute(sql`drop table ${table}`);
 });
 
 test('all date and time columns without timezone third case mode date', async () => {
@@ -2884,112 +3211,117 @@ test('all date and time columns without timezone third case mode date', async ()
 });
 
 test('test mode string for timestamp with timezone', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const table = publicSchema.table('all_columns', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		timestamp: timestamp('timestamp_string', { mode: 'string', withTimezone: true }).notNull(),
-	});
+  const table = publicSchema.table('all_columns', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    timestamp: timestamp('timestamp_string', {
+      mode: 'string',
+      withTimezone: true,
+    }).notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 
-	await db.execute(sql`
+  await db.execute(sql`
 		create table ${table} (
 					id integer primary key default nextval('serial_users'),
 					timestamp_string timestamptz not null
 			)
 	`);
 
-	const timestampString = '2022-01-01 00:00:00.123456-0200';
+  const timestampString = '2022-01-01 00:00:00.123456-0200';
 
-	// 1. Insert date in string format with timezone in it
-	await db.insert(table).values([
-		{ id: 1, timestamp: timestampString },
-	]);
+  // 1. Insert date in string format with timezone in it
+  await db.insert(table).values([{ id: 1, timestamp: timestampString }]);
 
-	// 2. Select date in string format and check that the values are the same
-	const result = await db.select().from(table);
+  // 2. Select date in string format and check that the values are the same
+  const result = await db.select().from(table);
 
-	const normalized = result[0]?.timestamp;
-	assert(String(normalized).startsWith('2022-01-01 02:00:00.123'));
+  const normalized = result[0]?.timestamp;
+  assert(String(normalized).startsWith('2022-01-01 02:00:00.123'));
 
-	// 3. Select as raw query and checke that values are the same
-	const result2 = await db.execute<{
-		id: number;
-		timestamp_string: string;
-	}>(sql`select * from ${table}`);
+  // 3. Select as raw query and checke that values are the same
+  const result2 = await db.execute<{
+    id: number;
+    timestamp_string: string;
+  }>(sql`select * from ${table}`);
 
-	// 3.1 Notice that postgres will return the date in UTC, but it is exactlt the same
-	const normalized2 = result2[0]?.timestamp_string;
-	const normalized2String =
-		normalized2 instanceof Date
-			? normalized2.toISOString().replace('T', ' ')
-			: String(normalized2 ?? '');
-	assert(normalized2String.startsWith('2022-01-01 02:00:00.123'));
+  // 3.1 Notice that postgres will return the date in UTC, but it is exactlt the same
+  const normalized2 = result2[0]?.timestamp_string;
+  const normalized2String =
+    normalized2 instanceof Date
+      ? normalized2.toISOString().replace('T', ' ')
+      : String(normalized2 ?? '');
+  assert(normalized2String.startsWith('2022-01-01 02:00:00.123'));
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 });
 
 test('test mode date for timestamp with timezone', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const table = publicSchema.table('all_columns', {
-		id: integer('id').primaryKey().default(sql`nextval('serial_users')`),
-		timestamp: timestamp('timestamp_string', { mode: 'date', withTimezone: true }).notNull(),
-	});
+  const table = publicSchema.table('all_columns', {
+    id: integer('id')
+      .primaryKey()
+      .default(sql`nextval('serial_users')`),
+    timestamp: timestamp('timestamp_string', {
+      mode: 'date',
+      withTimezone: true,
+    }).notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 
-	await db.execute(sql`
+  await db.execute(sql`
 		create table ${table} (
 					id integer primary key default nextval('serial_users'),
 					timestamp_string timestamptz not null
 			)
 	`);
 
-	const timestampString = new Date('2022-01-01T00:00:00.456-0200');
+  const timestampString = new Date('2022-01-01T00:00:00.456-0200');
 
-	// 1. Insert date in string format with timezone in it
-	await db.insert(table).values([
-		{ id: 1, timestamp: timestampString },
-	]);
+  // 1. Insert date in string format with timezone in it
+  await db.insert(table).values([{ id: 1, timestamp: timestampString }]);
 
-	// 2. Select date in string format and check that the values are the same
-	const result = await db.select().from(table);
+  // 2. Select date in string format and check that the values are the same
+  const result = await db.select().from(table);
 
-	// 2.1 Notice that postgres will return the date in UTC, but it is exactly the same
-	assert.deepEqual(result[0]?.timestamp.getTime(), timestampString.getTime());
+  // 2.1 Notice that postgres will return the date in UTC, but it is exactly the same
+  assert.deepEqual(result[0]?.timestamp.getTime(), timestampString.getTime());
 
-	// 3. Select as raw query and checke that values are the same
-	const result2 = await db.execute<{
-		id: number;
-		timestamp_string: string;
-	}>(sql`select * from ${table}`);
+  // 3. Select as raw query and checke that values are the same
+  const result2 = await db.execute<{
+    id: number;
+    timestamp_string: string;
+  }>(sql`select * from ${table}`);
 
-	// 3.1 Notice that postgres will return the date in UTC, but it is exactlt the same
-	const ts = result2[0]?.timestamp_string;
-	const tsString =
-		ts instanceof Date ? ts.toISOString() : String(ts ?? '');
-	assert.deepEqual(tsString, '2022-01-01T02:00:00.456Z');
+  // 3.1 Notice that postgres will return the date in UTC, but it is exactlt the same
+  const ts = result2[0]?.timestamp_string;
+  const tsString = ts instanceof Date ? ts.toISOString() : String(ts ?? '');
+  assert.deepEqual(tsString, '2022-01-01T02:00:00.456Z');
 
-	await db.execute(sql`drop table if exists ${table}`);
+  await db.execute(sql`drop table if exists ${table}`);
 });
 
 test('test mode string for timestamp with timezone in UTC timezone', async () => {
-	// DuckDB doesn't expose or change session timezones like Postgres; assert unsupported.
-	const { db } = ctx;
-	let tzErr = false;
-	try {
-		await db.execute(sql`show timezone`);
-	} catch {
-		tzErr = true;
-	}
-	assert(tzErr);
+  // DuckDB doesn't expose or change session timezones like Postgres; assert unsupported.
+  const { db } = ctx;
+  let tzErr = false;
+  try {
+    await db.execute(sql`show timezone`);
+  } catch {
+    tzErr = true;
+  }
+  assert(tzErr);
 });
 
 test('test mode string for timestamp with timezone in different timezone', async () => {
-	const { db } = ctx;
-	await db.execute(sql`set time zone 'HST'`).catch(() => {});
+  const { db } = ctx;
+  await db.execute(sql`set time zone 'HST'`).catch(() => {});
 });
 
 test('orderBy with aliased column', () => {
@@ -3060,88 +3392,121 @@ test('select from sql', async () => {
 });
 
 test('timestamp timezone', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const usersTableWithAndWithoutTimezone = publicSchema.table('users_test_with_and_without_timezone', {
-		id: integer('id').primaryKey(),
-		name: text('name').notNull(),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
-	});
+  const usersTableWithAndWithoutTimezone = publicSchema.table(
+    'users_test_with_and_without_timezone',
+    {
+      id: integer('id').primaryKey(),
+      name: text('name').notNull(),
+      createdAt: timestamp('created_at', { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+      updatedAt: timestamp('updated_at', { withTimezone: false })
+        .notNull()
+        .defaultNow(),
+    }
+  );
 
-	await db.execute(sql`drop table if exists ${usersTableWithAndWithoutTimezone}`);
+  await db.execute(
+    sql`drop table if exists ${usersTableWithAndWithoutTimezone}`
+  );
 
-	await db.execute(
-		sql`
+  await db.execute(
+    sql`
 			create table buplic.users_test_with_and_without_timezone (
 				id integer not null primary key,
 				name text not null,
 				created_at timestamptz not null default now(),
 				updated_at timestamp not null default now()
 			)
-		`,
-	);
+		`
+  );
 
-	const date = new Date(Date.parse('2020-01-01T00:00:00+04:00'));
+  const date = new Date(Date.parse('2020-01-01T00:00:00+04:00'));
 
-	await db.insert(usersTableWithAndWithoutTimezone).values({ id: 1, name: 'With default times' });
-	await db.insert(usersTableWithAndWithoutTimezone).values({
+  await db
+    .insert(usersTableWithAndWithoutTimezone)
+    .values({ id: 1, name: 'With default times' });
+  await db.insert(usersTableWithAndWithoutTimezone).values({
     id: 2,
-		name: 'Without default times',
-		createdAt: date,
-		updatedAt: date,
-	});
-	const users = await db.select().from(usersTableWithAndWithoutTimezone);
+    name: 'Without default times',
+    createdAt: date,
+    updatedAt: date,
+  });
+  const users = await db.select().from(usersTableWithAndWithoutTimezone);
 
-	const toDate = (val: unknown) =>
-		val instanceof Date ? val : new Date(String(val));
+  const toDate = (val: unknown) =>
+    val instanceof Date ? val : new Date(String(val));
 
-	const toleranceMs = 5 * 60_000;
+  const toleranceMs = 5 * 60_000;
 
-	// check that the timestamps are set correctly for default times
-	assert(!Number.isNaN(toDate(users[0]!.updatedAt).getTime()));
-	assert(!Number.isNaN(toDate(users[0]!.createdAt).getTime()));
+  // check that the timestamps are set correctly for default times
+  assert(!Number.isNaN(toDate(users[0]!.updatedAt).getTime()));
+  assert(!Number.isNaN(toDate(users[0]!.createdAt).getTime()));
 
-	// check that the timestamps are set correctly for non default times
-	assert(Math.abs(toDate(users[1]!.updatedAt).getTime() - date.getTime()) < toleranceMs);
-	assert(Math.abs(toDate(users[1]!.createdAt).getTime() - date.getTime()) < toleranceMs);
+  // check that the timestamps are set correctly for non default times
+  assert(
+    Math.abs(toDate(users[1]!.updatedAt).getTime() - date.getTime()) <
+      toleranceMs
+  );
+  assert(
+    Math.abs(toDate(users[1]!.createdAt).getTime() - date.getTime()) <
+      toleranceMs
+  );
 });
 
 test('transaction', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('users_transactions', {
-		id: integer('id').primaryKey(),
-		balance: integer('balance').notNull(),
-	});
-	const products = publicSchema.table('products_transactions', {
-		id: integer('id').primaryKey(),
-		price: integer('price').notNull(),
-		stock: integer('stock').notNull(),
-	});
+  const users = publicSchema.table('users_transactions', {
+    id: integer('id').primaryKey(),
+    balance: integer('balance').notNull(),
+  });
+  const products = publicSchema.table('products_transactions', {
+    id: integer('id').primaryKey(),
+    price: integer('price').notNull(),
+    stock: integer('stock').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
-	await db.execute(sql`drop table if exists ${products}`);
+  await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(sql`drop table if exists ${products}`);
 
-	await db.execute(sql`create table buplic.users_transactions (id integer not null primary key, balance integer not null)`);
-	await db.execute(
-		sql`create table buplic.products_transactions (id integer not null primary key, price integer not null, stock integer not null)`,
-	);
+  await db.execute(
+    sql`create table buplic.users_transactions (id integer not null primary key, balance integer not null)`
+  );
+  await db.execute(
+    sql`create table buplic.products_transactions (id integer not null primary key, price integer not null, stock integer not null)`
+  );
 
-	const user = await db.insert(users).values({ id: 1, balance: 100 }).returning().then((rows) => rows[0]!);
-	const product = await db.insert(products).values({ id: 2, price: 10, stock: 10 }).returning().then((rows) => rows[0]!);
+  const user = await db
+    .insert(users)
+    .values({ id: 1, balance: 100 })
+    .returning()
+    .then((rows) => rows[0]!);
+  const product = await db
+    .insert(products)
+    .values({ id: 2, price: 10, stock: 10 })
+    .returning()
+    .then((rows) => rows[0]!);
 
-	await db.transaction(async (tx) => {
-		await tx.update(users).set({ balance: user.balance - product.price }).where(eq(users.id, user.id));
-		await tx.update(products).set({ stock: product.stock - 1 }).where(eq(products.id, product.id));
-	});
+  await db.transaction(async (tx) => {
+    await tx
+      .update(users)
+      .set({ balance: user.balance - product.price })
+      .where(eq(users.id, user.id));
+    await tx
+      .update(products)
+      .set({ stock: product.stock - 1 })
+      .where(eq(products.id, product.id));
+  });
 
-	const result = await db.select().from(users);
+  const result = await db.select().from(users);
 
-	assert.deepEqual(result, [{ id: 1, balance: 90 }]);
+  assert.deepEqual(result, [{ id: 1, balance: 90 }]);
 
-	await db.execute(sql`drop table ${users}`);
-	await db.execute(sql`drop table ${products}`);
+  await db.execute(sql`drop table ${users}`);
+  await db.execute(sql`drop table ${products}`);
 });
 
 test('transaction rollback', async () => {
@@ -3173,62 +3538,62 @@ test('transaction rollback', async () => {
 });
 
 test('nested transaction', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('users_nested_transactions', {
-		id: integer('id').primaryKey(),
-		balance: integer('balance').notNull(),
-	});
+  const users = publicSchema.table('users_nested_transactions', {
+    id: integer('id').primaryKey(),
+    balance: integer('balance').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(sql`drop table if exists ${users}`);
 
-	await db.execute(
-		sql`create table buplic.users_nested_transactions (id integer not null primary key, balance integer not null)`,
-	);
+  await db.execute(
+    sql`create table buplic.users_nested_transactions (id integer not null primary key, balance integer not null)`
+  );
 
-	await db.transaction(async (tx) => {
-		await tx.insert(users).values({ id: 1, balance: 100 });
+  await db.transaction(async (tx) => {
+    await tx.insert(users).values({ id: 1, balance: 100 });
 
-		await tx.transaction(async (tx) => {
-			await tx.update(users).set({ id: 1, balance: 200 });
-		});
-	});
+    await tx.transaction(async (tx) => {
+      await tx.update(users).set({ id: 1, balance: 200 });
+    });
+  });
 
-	const rows = await db.select().from(users);
-	assert.deepEqual(rows, [{ id: 1, balance: 200 }]);
+  const rows = await db.select().from(users);
+  assert.deepEqual(rows, [{ id: 1, balance: 200 }]);
 
-	await db.execute(sql`drop table ${users}`);
+  await db.execute(sql`drop table ${users}`);
 });
 
 test('nested transaction rollback', async () => {
-	const { db } = ctx;
+  const { db } = ctx;
 
-	const users = publicSchema.table('users_nested_transactions_rollback', {
-		id: integer('id').primaryKey(),
-		balance: integer('balance').notNull(),
-	});
+  const users = publicSchema.table('users_nested_transactions_rollback', {
+    id: integer('id').primaryKey(),
+    balance: integer('balance').notNull(),
+  });
 
-	await db.execute(sql`drop table if exists ${users}`);
+  await db.execute(sql`drop table if exists ${users}`);
 
-	await db.execute(
-		sql`create table buplic.users_nested_transactions_rollback (id integer not null primary key, balance integer not null)`,
-	);
+  await db.execute(
+    sql`create table buplic.users_nested_transactions_rollback (id integer not null primary key, balance integer not null)`
+  );
 
-	await expect(
-		db.transaction(async (tx) => {
-			await tx.insert(users).values({ id: 1, balance: 100 });
+  await expect(
+    db.transaction(async (tx) => {
+      await tx.insert(users).values({ id: 1, balance: 100 });
 
-			await tx.transaction(async (tx) => {
-				await tx.update(users).set({ id: 1, balance: 200 });
-				tx.rollback();
-			});
-		}),
-	).rejects.toThrowError(TransactionRollbackError);
+      await tx.transaction(async (tx) => {
+        await tx.update(users).set({ id: 1, balance: 200 });
+        tx.rollback();
+      });
+    })
+  ).rejects.toThrowError(TransactionRollbackError);
 
-	const rows = await db.select().from(users);
-	assert.deepEqual(rows, []);
+  const rows = await db.select().from(users);
+  assert.deepEqual(rows, []);
 
-	await db.execute(sql`drop table ${users}`);
+  await db.execute(sql`drop table ${users}`);
 });
 
 test('join subquery with join', async () => {
@@ -3448,7 +3813,9 @@ test('update undefined', async () => {
     sql`create table ${users} (id integer not null primary key, name text)`
   );
 
-  expect(() => db.update(users).set({ name: undefined }).toSQL()).toThrowError();
+  expect(() =>
+    db.update(users).set({ name: undefined }).toSQL()
+  ).toThrowError();
 
   await db.update(users).set({ id: 1, name: undefined });
 
@@ -4129,9 +4496,13 @@ test('aggregate function: avg', async () => {
   const table = aggregateTable;
   await setupAggregateFunctionsTest(db);
 
-  const result1 = await db.select({ value: sql<number>`avg(${table.b})` }).from(table);
+  const result1 = await db
+    .select({ value: sql<number>`avg(${table.b})` })
+    .from(table);
   const result2 = await db.select({ value: avg(table.nullOnly) }).from(table);
-  const result3 = await db.select({ value: sql<number>`avg(distinct ${table.b})` }).from(table);
+  const result3 = await db
+    .select({ value: sql<number>`avg(distinct ${table.b})` })
+    .from(table);
 
   assert.deepEqual(result1[0]?.value, 33.3333333333333333);
   assert.deepEqual(result2[0]?.value, null);

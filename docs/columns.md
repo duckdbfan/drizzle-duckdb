@@ -30,13 +30,13 @@ import {
 ```typescript
 const table = pgTable('example', {
   // Integers
-  small: smallint('small'),              // SMALLINT (-32768 to 32767)
-  regular: integer('regular'),           // INTEGER (-2B to 2B)
+  small: smallint('small'), // SMALLINT (-32768 to 32767)
+  regular: integer('regular'), // INTEGER (-2B to 2B)
   big: bigint('big', { mode: 'number' }), // BIGINT
 
   // Floating point
-  float: real('float'),                  // REAL (4 bytes)
-  double: doublePrecision('double'),     // DOUBLE (8 bytes)
+  float: real('float'), // REAL (4 bytes)
+  double: doublePrecision('double'), // DOUBLE (8 bytes)
 
   // Exact numeric
   price: numeric('price', { precision: 10, scale: 2 }),
@@ -48,11 +48,11 @@ const table = pgTable('example', {
 ```typescript
 const table = pgTable('example', {
   // Variable length
-  name: text('name'),                    // TEXT (unlimited)
+  name: text('name'), // TEXT (unlimited)
   email: varchar('email', { length: 255 }), // VARCHAR(255)
 
   // Fixed length
-  code: char('code', { length: 2 }),     // CHAR(2)
+  code: char('code', { length: 2 }), // CHAR(2)
 });
 ```
 
@@ -109,6 +109,7 @@ const table = pgTable('example', {
 ```
 
 **Supported element types:**
+
 - Integers: `'SMALLINT'`, `'INTEGER'`, `'BIGINT'`, `'HUGEINT'`
 - Unsigned: `'USMALLINT'`, `'UINTEGER'`, `'UBIGINT'`
 - Floats: `'FLOAT'`, `'DOUBLE'`
@@ -259,6 +260,7 @@ const events = pgTable('events', {
 ```
 
 **Modes:**
+
 - `mode: 'date'` (default) — Returns JavaScript `Date` objects
 - `mode: 'string'` — Returns ISO-formatted strings like `'2024-01-15 10:30:00+00'`
 
@@ -373,7 +375,14 @@ Check if an array is **contained by** the specified values (equivalent to Postgr
 const results = await db
   .select()
   .from(products)
-  .where(duckDbArrayContained(products.tags, ['electronics', 'sale', 'featured', 'new']));
+  .where(
+    duckDbArrayContained(products.tags, [
+      'electronics',
+      'sale',
+      'featured',
+      'new',
+    ])
+  );
 ```
 
 Maps to DuckDB's `array_has_all(values, column)`.
@@ -396,17 +405,17 @@ Maps to DuckDB's `array_has_any(column, values)`.
 
 By default, the driver rewrites Postgres array operators to DuckDB equivalents:
 
-| Postgres | DuckDB |
-|----------|--------|
-| `@>` | `array_has_all(left, right)` |
-| `<@` | `array_has_all(right, left)` |
-| `&&` | `array_has_any(left, right)` |
+| Postgres | DuckDB                       |
+| -------- | ---------------------------- |
+| `@>`     | `array_has_all(left, right)` |
+| `<@`     | `array_has_all(right, left)` |
+| `&&`     | `array_has_any(left, right)` |
 
 This is controlled by the `rewriteArrays` option (default: `true`):
 
 ```typescript
 const db = drizzle(connection, {
-  rewriteArrays: true,  // Enable automatic rewriting (default)
+  rewriteArrays: true, // Enable automatic rewriting (default)
 });
 ```
 

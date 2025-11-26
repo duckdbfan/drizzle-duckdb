@@ -40,11 +40,17 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case '--schema':
       case '--schemas':
-        options.schemas = argv[++i]?.split(',').map((s) => s.trim()).filter(Boolean);
+        options.schemas = argv[++i]
+          ?.split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
         break;
       case '--out':
       case '--outFile':
-        options.outFile = path.resolve(process.cwd(), argv[++i] ?? 'drizzle/schema.ts');
+        options.outFile = path.resolve(
+          process.cwd(),
+          argv[++i] ?? 'drizzle/schema.ts'
+        );
         break;
       case '--include-views':
       case '--includeViews':
@@ -133,7 +139,10 @@ async function main() {
 
     console.log(`Wrote schema to ${options.outFile}`);
   } finally {
-    if ('closeSync' in connection && typeof connection.closeSync === 'function') {
+    if (
+      'closeSync' in connection &&
+      typeof connection.closeSync === 'function'
+    ) {
       connection.closeSync();
     }
   }

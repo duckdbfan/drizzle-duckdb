@@ -1,10 +1,4 @@
-import {
-  Column,
-  SQL,
-  getTableName,
-  is,
-  sql,
-} from 'drizzle-orm';
+import { Column, SQL, getTableName, is, sql } from 'drizzle-orm';
 import type { SelectedFields } from 'drizzle-orm/pg-core';
 
 function mapEntries(
@@ -38,8 +32,7 @@ function mapEntries(
         }
 
         if (is(value, SQL) || is(value, Column)) {
-          const aliased =
-            is(value, SQL) ? value : sql`${value}`.mapWith(value);
+          const aliased = is(value, SQL) ? value : sql`${value}`.mapWith(value);
           return [key, aliased.as(qualified)];
         }
 

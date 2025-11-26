@@ -1,17 +1,53 @@
 exclude: '^(dist/|node_modules/)'
 repos:
+  # Standard file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-json
+        exclude: '^tsconfig.*\.json$'
       - id: check-merge-conflict
       - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  # Security - detect secrets
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # Local hooks
   - repo: local
     hooks:
+      # Fast checks (run on every commit)
+      - id: prettier
+        name: Prettier formatting
+        entry: bunx prettier --check --ignore-unknown
+        language: system
+        types_or: [javascript, json, yaml, markdown, ts]
+
+      - id: typecheck
+        name: TypeScript type check
+        entry: bunx tsc --noEmit --project tsconfig.check.json
+        language: system
+        pass_filenames: false
+        types: [ts]
+
+      # Tests (run on push for faster commits)
       - id: bun-test
         name: Bun test suite
         entry: bun run test -- run
         language: system
         pass_filenames: false
+        stages: [pre-push]
+
+      # Build check (manual/CI only)
+      - id: build
+        name: Build check
+        entry: bun run build
+        language: system
+        pass_filenames: false
+        stages: [manual]

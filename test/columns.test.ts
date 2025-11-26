@@ -8,10 +8,7 @@ import {
   duckDbStruct,
   migrate,
 } from '../src';
-import {
-  integer,
-  pgTable,
-} from 'drizzle-orm/pg-core';
+import { integer, pgTable } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import assert from 'node:assert/strict';
 import { afterAll, beforeAll, test } from 'vitest';
@@ -20,7 +17,11 @@ const ENABLE_LOGGING = true;
 
 const structTable = pgTable('struct_table', {
   id: integer('id').primaryKey(),
-  struct_data: duckDbStruct<{ name: string; age: number; favorite_numbers: number[] }>('struct_data', {
+  struct_data: duckDbStruct<{
+    name: string;
+    age: number;
+    favorite_numbers: number[];
+  }>('struct_data', {
     name: 'STRING',
     age: 'INTEGER',
     favorite_numbers: 'INTEGER[]',
@@ -172,7 +173,11 @@ test('struct + arrays via custom helper', async () => {
   });
 
   const rows = await db
-    .select({ id: arraysTable.id, numbers: arraysTable.numbers, payload: arraysTable.payload })
+    .select({
+      id: arraysTable.id,
+      numbers: arraysTable.numbers,
+      payload: arraysTable.payload,
+    })
     .from(arraysTable);
 
   assert.deepEqual(rows, [

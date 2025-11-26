@@ -397,7 +397,9 @@ async function main() {
       orderStats.map((row) => ({
         userName: row.userName,
         totalOrders: Number(row.totalOrders),
-        totalSpent: row.totalSpent ? `$${Number(row.totalSpent).toFixed(2)}` : '$0.00',
+        totalSpent: row.totalSpent
+          ? `$${Number(row.totalSpent).toFixed(2)}`
+          : '$0.00',
         avgOrderValue: row.avgOrderValue
           ? `$${Number(row.avgOrderValue).toFixed(2)}`
           : '$0.00',

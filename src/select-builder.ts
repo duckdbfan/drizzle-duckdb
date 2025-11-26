@@ -6,11 +6,7 @@ import {
   type SelectedFields,
   type TableLikeHasEmptySelection,
 } from 'drizzle-orm/pg-core/query-builders';
-import {
-  PgColumn,
-  PgTable,
-  type PgSession,
-} from 'drizzle-orm/pg-core';
+import { PgColumn, PgTable, type PgSession } from 'drizzle-orm/pg-core';
 import { Subquery, ViewBaseConfig, type SQLWrapper } from 'drizzle-orm';
 import { PgViewBase } from 'drizzle-orm/pg-core/view-base';
 import type {
@@ -25,7 +21,7 @@ import { getTableColumns, type DrizzleTypeError } from 'drizzle-orm/utils';
 interface PgViewBaseInternal<
   TName extends string = string,
   TExisting extends boolean = boolean,
-  TSelectedFields extends ColumnsSelection = ColumnsSelection
+  TSelectedFields extends ColumnsSelection = ColumnsSelection,
 > extends PgViewBase<TName, TExisting, TSelectedFields> {
   [ViewBaseConfig]?: {
     selectedFields: SelectedFields;
@@ -34,7 +30,7 @@ interface PgViewBaseInternal<
 
 export class DuckDBSelectBuilder<
   TSelection extends SelectedFields | undefined,
-  TBuilderMode extends 'db' | 'qb' = 'db'
+  TBuilderMode extends 'db' | 'qb' = 'db',
 > extends PgSelectBuilder<TSelection, TBuilderMode> {
   private _fields: TSelection;
   private _session: PgSession | undefined;

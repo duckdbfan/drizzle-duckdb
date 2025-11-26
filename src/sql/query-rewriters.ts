@@ -85,10 +85,7 @@ export function adaptArrayOperators(query: string): string {
     let idx = rewritten.indexOf(token);
     while (idx !== -1) {
       const [leftStart, leftExpr] = walkLeft(rewritten, idx - 1);
-      const [rightEnd, rightExpr] = walkRight(
-        rewritten,
-        idx + token.length
-      );
+      const [rightEnd, rightExpr] = walkRight(rewritten, idx + token.length);
 
       const left = leftExpr.trim();
       const right = rightExpr.trim();
@@ -98,9 +95,7 @@ export function adaptArrayOperators(query: string): string {
       })`;
 
       rewritten =
-        rewritten.slice(0, leftStart) +
-        replacement +
-        rewritten.slice(rightEnd);
+        rewritten.slice(0, leftStart) + replacement + rewritten.slice(rightEnd);
 
       idx = rewritten.indexOf(token, leftStart + replacement.length);
     }
@@ -136,7 +131,9 @@ export function queryAdapter(query: string): string {
       if (noTableProp) {
         const [, column, alias] = noTableProp;
         const asAlias = ` as '${column}'`;
-        return alias ? trimmedField.replace(alias, asAlias) : `${trimmedField}${asAlias}`;
+        return alias
+          ? trimmedField.replace(alias, asAlias)
+          : `${trimmedField}${asAlias}`;
       }
 
       return trimmedField;

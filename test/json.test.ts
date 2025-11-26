@@ -54,7 +54,10 @@ afterAll(() => {
 });
 
 test('duckDbJson round-trips objects', async () => {
-  const rows = await ctx.db.select().from(jsonTable).where(sql`${jsonTable.id} = 1`);
+  const rows = await ctx.db
+    .select()
+    .from(jsonTable)
+    .where(sql`${jsonTable.id} = 1`);
   expect(rows[0]?.payload).toEqual({
     foo: 'bar',
     nested: { count: 1 },
@@ -63,15 +66,16 @@ test('duckDbJson round-trips objects', async () => {
 });
 
 test('json operators and functions work with duckDbJson', async () => {
-  const [{ nested_count: nestedCount, foo_text: fooText }] = await ctx.db.execute(
-    sql`
+  const [{ nested_count: nestedCount, foo_text: fooText }] =
+    await ctx.db.execute(
+      sql`
       select
         json_extract(${jsonTable.payload}, '$.nested.count') as nested_count,
         ${jsonTable.payload} ->> 'foo' as foo_text
       from ${jsonTable}
       where ${jsonTable.id} = 1
     `
-  );
+    );
 
   expect(Number(nestedCount)).toBe(1);
   expect(fooText).toBe('bar');

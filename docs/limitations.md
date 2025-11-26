@@ -4,19 +4,19 @@ This page documents known differences between Drizzle DuckDB and Drizzle's stand
 
 ## Feature Support Matrix
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Select queries | Full | All standard select operations work |
-| Insert/Update/Delete | Full | Including `.returning()` |
-| Joins | Full | All join types supported |
-| Subqueries | Full | |
-| CTEs (WITH clauses) | Full | |
-| Aggregations | Full | |
-| Transactions | Partial | No savepoints |
-| Prepared statements | Partial | No statement caching |
-| JSON/JSONB columns | None | Use `duckDbJson()` instead |
-| Streaming results | None | Results are materialized |
-| Relational queries | Full | With schema configuration |
+| Feature              | Status  | Notes                               |
+| -------------------- | ------- | ----------------------------------- |
+| Select queries       | Full    | All standard select operations work |
+| Insert/Update/Delete | Full    | Including `.returning()`            |
+| Joins                | Full    | All join types supported            |
+| Subqueries           | Full    |                                     |
+| CTEs (WITH clauses)  | Full    |                                     |
+| Aggregations         | Full    |                                     |
+| Transactions         | Partial | No savepoints                       |
+| Prepared statements  | Partial | No statement caching                |
+| JSON/JSONB columns   | None    | Use `duckDbJson()` instead          |
+| Streaming results    | None    | Results are materialized            |
+| Relational queries   | Full    | With schema configuration           |
 
 ## Transactions
 
@@ -52,7 +52,7 @@ import { json, jsonb } from 'drizzle-orm/pg-core';
 
 // This will throw at runtime
 const table = pgTable('example', {
-  data: json('data'),  // Error!
+  data: json('data'), // Error!
 });
 ```
 
@@ -62,7 +62,7 @@ const table = pgTable('example', {
 import { duckDbJson } from '@leonardovida-md/drizzle-neo-duckdb';
 
 const table = pgTable('example', {
-  data: duckDbJson('data'),  // Works!
+  data: duckDbJson('data'), // Works!
 });
 ```
 
@@ -103,7 +103,7 @@ When selecting the same column multiple times (e.g., in complex joins), duplicat
 const result = await db
   .select({
     userId: users.id,
-    postId: posts.id,  // Would conflict without deduplication
+    postId: posts.id, // Would conflict without deduplication
   })
   .from(users)
   .innerJoin(posts, eq(users.id, posts.userId));
@@ -137,10 +137,10 @@ await db.insert(events).values({
 
 ```typescript
 // Return Date objects (default)
-duckDbTimestamp('col', { mode: 'date' })
+duckDbTimestamp('col', { mode: 'date' });
 
 // Return strings in DuckDB format
-duckDbTimestamp('col', { mode: 'string' })
+duckDbTimestamp('col', { mode: 'string' });
 // Returns: '2024-01-15 10:30:00+00'
 ```
 
@@ -150,8 +150,8 @@ duckDbTimestamp('col', { mode: 'string' })
 
 By default, Postgres array operators are rewritten to DuckDB functions:
 
-| Postgres | DuckDB Equivalent |
-|----------|-------------------|
+| Postgres               | DuckDB Equivalent              |
+| ---------------------- | ------------------------------ |
 | `column @> ARRAY[...]` | `array_has_all(column, [...])` |
 | `column <@ ARRAY[...]` | `array_has_all([...], column)` |
 | `column && ARRAY[...]` | `array_has_any(column, [...])` |
@@ -184,7 +184,7 @@ To throw instead of warn:
 
 ```typescript
 const db = drizzle(connection, {
-  rejectStringArrayLiterals: true,  // Throws on '{...}' literals
+  rejectStringArrayLiterals: true, // Throws on '{...}' literals
 });
 ```
 
@@ -227,7 +227,7 @@ await db.insert(events).values(manyEvents);
 
 // Less efficient: individual inserts in a loop
 for (const event of manyEvents) {
-  await db.insert(events).values(event);  // Many round trips
+  await db.insert(events).values(event); // Many round trips
 }
 ```
 
@@ -237,19 +237,15 @@ Results are materialized in memory. For very large result sets:
 
 ```typescript
 // Add LIMIT for large tables
-const page = await db
-  .select()
-  .from(hugeTable)
-  .limit(1000)
-  .offset(0);
+const page = await db.select().from(hugeTable).limit(1000).offset(0);
 ```
 
 ## Workarounds Summary
 
-| Limitation | Workaround |
-|------------|------------|
-| No savepoints | Avoid nested transactions |
-| No JSON/JSONB | Use `duckDbJson()` |
-| No streaming | Use pagination with LIMIT/OFFSET |
-| String array warnings | Use native arrays or DuckDB helpers |
+| Limitation               | Workaround                                  |
+| ------------------------ | ------------------------------------------- |
+| No savepoints            | Avoid nested transactions                   |
+| No JSON/JSONB            | Use `duckDbJson()`                          |
+| No streaming             | Use pagination with LIMIT/OFFSET            |
+| String array warnings    | Use native arrays or DuckDB helpers         |
 | Default schema is `main` | Explicitly use `pgSchema('main')` if needed |

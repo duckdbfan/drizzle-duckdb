@@ -24,7 +24,10 @@ const listTable = pgTable('duck_list_types', {
     name: 'TEXT',
     flags: 'TEXT[]',
   }),
-  createdAt: duckDbTimestamp('created_at', { withTimezone: true, mode: 'date' }),
+  createdAt: duckDbTimestamp('created_at', {
+    withTimezone: true,
+    mode: 'date',
+  }),
   createdLabel: duckDbTimestamp('created_label', { mode: 'string' }),
 });
 
@@ -75,10 +78,7 @@ test('duckdb struct/list/array roundtrip', async () => {
     createdLabel: '2024-01-02 12:00:00',
   });
 
-  const rows = await ctx.db
-    .select()
-    .from(listTable)
-    .where(eq(listTable.id, 1));
+  const rows = await ctx.db.select().from(listTable).where(eq(listTable.id, 1));
 
   expect(rows[0]!.id).toBe(1);
   expect(rows[0]!.tags).toEqual(['ORM', 'Typescript']);

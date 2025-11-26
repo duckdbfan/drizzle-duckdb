@@ -39,10 +39,7 @@ afterAll(() => {
 });
 
 test('@duckdb/node-api supports inserts and selects', async () => {
-  await db.insert(nodeUsers).values([
-    { name: 'Neo' },
-    { name: 'Trinity' },
-  ]);
+  await db.insert(nodeUsers).values([{ name: 'Neo' }, { name: 'Trinity' }]);
 
   const rows = await db.select().from(nodeUsers).orderBy(nodeUsers.id);
 
@@ -63,9 +60,9 @@ test('transactions work with the node api connection', async () => {
     })
   ).rejects.toThrow();
 
-  const names = (
-    await db.select({ name: nodeUsers.name }).from(nodeUsers)
-  ).map((row) => row.name);
+  const names = (await db.select({ name: nodeUsers.name }).from(nodeUsers)).map(
+    (row) => row.name
+  );
 
   expect(names).toContain('Committed');
   expect(names).not.toContain('Rolled back');

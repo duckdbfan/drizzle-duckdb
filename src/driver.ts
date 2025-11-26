@@ -49,14 +49,14 @@ export class DuckDBDriver {
 }
 
 export interface DuckDBDrizzleConfig<
-  TSchema extends Record<string, unknown> = Record<string, never>
+  TSchema extends Record<string, unknown> = Record<string, never>,
 > extends DrizzleConfig<TSchema> {
   rewriteArrays?: boolean;
   rejectStringArrayLiterals?: boolean;
 }
 
 export function drizzle<
-  TSchema extends Record<string, unknown> = Record<string, never>
+  TSchema extends Record<string, unknown> = Record<string, never>,
 >(
   client: DuckDBClientLike,
   config: DuckDBDrizzleConfig<TSchema> = {}
@@ -95,7 +95,8 @@ export function drizzle<
 
 export class DuckDBDatabase<
   TFullSchema extends Record<string, unknown> = Record<string, never>,
-  TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>
+  TSchema extends
+    TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>,
 > extends PgDatabase<DuckDBQueryResultHKT, TFullSchema, TSchema> {
   static readonly [entityKind]: string = 'DuckDBDatabase';
 
@@ -111,9 +112,9 @@ export class DuckDBDatabase<
   select<TSelection extends SelectedFields>(
     fields: TSelection
   ): DuckDBSelectBuilder<TSelection>;
-  select(fields?: SelectedFields): DuckDBSelectBuilder<
-    SelectedFields | undefined
-  > {
+  select(
+    fields?: SelectedFields
+  ): DuckDBSelectBuilder<SelectedFields | undefined> {
     const selectedFields = fields ? aliasFields(fields) : undefined;
 
     return new DuckDBSelectBuilder({

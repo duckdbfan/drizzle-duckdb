@@ -25,7 +25,7 @@ import { executeOnClient, prepareParams } from './client.ts';
 export type { DuckDBClientLike, RowData } from './client.ts';
 
 export class DuckDBPreparedQuery<
-  T extends PreparedQueryConfig
+  T extends PreparedQueryConfig,
 > extends PgPreparedQuery<T> {
   static readonly [entityKind]: string = 'DuckDBPreparedQuery';
 
@@ -37,7 +37,9 @@ export class DuckDBPreparedQuery<
     private logger: Logger,
     private fields: SelectedFieldsOrdered | undefined,
     private _isResponseInArrayMode: boolean,
-    private customResultMapper: ((rows: unknown[][]) => T['execute']) | undefined,
+    private customResultMapper:
+      | ((rows: unknown[][]) => T['execute'])
+      | undefined,
     private rewriteArrays: boolean,
     private rejectStringArrayLiterals: boolean,
     private warnOnStringArrayLiteral?: (sql: string) => void
@@ -71,17 +73,10 @@ export class DuckDBPreparedQuery<
 
     this.logger.logQuery(rewrittenQuery, params);
 
-    const {
-      fields,
-      joinsNotNullableMap,
-      customResultMapper,
-    } = this as typeof this & { joinsNotNullableMap?: Record<string, boolean> };
+    const { fields, joinsNotNullableMap, customResultMapper } =
+      this as typeof this & { joinsNotNullableMap?: Record<string, boolean> };
 
-    const rows = await executeOnClient(
-      this.client,
-      rewrittenQuery,
-      params
-    );
+    const rows = await executeOnClient(this.client, rewrittenQuery, params);
 
     if (rows.length === 0 || !fields) {
       return rows as T['execute'];
@@ -115,7 +110,7 @@ export interface DuckDBSessionOptions {
 
 export class DuckDBSession<
   TFullSchema extends Record<string, unknown> = Record<string, never>,
-  TSchema extends TablesRelationalConfig = Record<string, never>
+  TSchema extends TablesRelationalConfig = Record<string, never>,
 > extends PgSession<DuckDBQueryResultHKT, TFullSchema, TSchema> {
   static readonly [entityKind]: string = 'DuckDBSession';
 
@@ -203,7 +198,7 @@ export class DuckDBSession<
 
 type PgTransactionInternals<
   TFullSchema extends Record<string, unknown> = Record<string, never>,
-  TSchema extends TablesRelationalConfig = Record<string, never>
+  TSchema extends TablesRelationalConfig = Record<string, never>,
 > = {
   dialect: DuckDBDialect;
   session: DuckDBSession<TFullSchema, TSchema>;
@@ -211,13 +206,13 @@ type PgTransactionInternals<
 
 type DuckDBTransactionWithInternals<
   TFullSchema extends Record<string, unknown> = Record<string, never>,
-  TSchema extends TablesRelationalConfig = Record<string, never>
+  TSchema extends TablesRelationalConfig = Record<string, never>,
 > = PgTransactionInternals<TFullSchema, TSchema> &
   DuckDBTransaction<TFullSchema, TSchema>;
 
 export class DuckDBTransaction<
   TFullSchema extends Record<string, unknown>,
-  TSchema extends TablesRelationalConfig
+  TSchema extends TablesRelationalConfig,
 > extends PgTransaction<DuckDBQueryResultHKT, TFullSchema, TSchema> {
   static readonly [entityKind]: string = 'DuckDBTransaction';
 
@@ -267,7 +262,6 @@ export type GenericTableData<T = RowData> = T[];
 
 const arrayLiteralWarning =
   'Received a stringified Postgres-style array literal. Use duckDbList()/duckDbArray() or pass native arrays instead. You can also set rejectStringArrayLiterals=true to throw.';
-
 
 export interface DuckDBQueryResultHKT extends PgQueryResultHKT {
   type: GenericTableData<Assume<this['row'], RowData>>;

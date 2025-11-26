@@ -93,7 +93,9 @@ function formatLiteral(value: unknown, typeHint?: string): string {
   }
 
   const str =
-    typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
+    typeof value === 'string'
+      ? value
+      : (JSON.stringify(value) ?? String(value));
 
   const escaped = str.replace(/'/g, "''");
   // Simple quoting based on hint.
@@ -140,7 +142,10 @@ function buildStructLiteral(
   return sql`struct_pack(${sql.join(parts, sql.raw(', '))})`;
 }
 
-function buildMapLiteral(value: Record<string, unknown>, valueType?: string): SQL {
+function buildMapLiteral(
+  value: Record<string, unknown>,
+  valueType?: string
+): SQL {
   const keys = Object.keys(value);
   const vals = Object.values(value);
   const keyList = buildListLiteral(keys, 'TEXT');
@@ -209,7 +214,7 @@ export const duckDbMap = <TData extends Record<string, any>>(
   valueType: AnyColType | ListColType | ArrayColType
 ) =>
   customType<{ data: TData; driverData: TData }>({
-  dataType() {
+    dataType() {
       return `MAP (STRING, ${valueType})`;
     },
     toDriver(value: TData) {
@@ -322,10 +327,7 @@ interface TimestampOptions {
   precision?: number;
 }
 
-export const duckDbTimestamp = (
-  name: string,
-  options: TimestampOptions = {}
-) =>
+export const duckDbTimestamp = (name: string, options: TimestampOptions = {}) =>
   customType<{
     data: Date | string;
     driverData: SQL | string | Date;
@@ -353,11 +355,9 @@ export const duckDbTimestamp = (
       if (value instanceof Date) {
         return value;
       }
-      const stringValue =
-        typeof value === 'string' ? value : value.toString();
+      const stringValue = typeof value === 'string' ? value : value.toString();
       const hasOffset =
-        stringValue.endsWith('Z') ||
-        /[+-]\d{2}:?\d{2}$/.test(stringValue);
+        stringValue.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(stringValue);
       const normalized = hasOffset
         ? stringValue.replace(' ', 'T')
         : `${stringValue.replace(' ', 'T')}Z`;
@@ -374,11 +374,9 @@ export const duckDbDate = (name: string) =>
       return value;
     },
     fromDriver(value: string | Date) {
-        const str =
-          value instanceof Date
-            ? value.toISOString().slice(0, 10)
-            : value;
-        return str;
+      const str =
+        value instanceof Date ? value.toISOString().slice(0, 10) : value;
+      return str;
     },
   })(name);
 

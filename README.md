@@ -119,7 +119,14 @@ Drizzle DuckDB uses `drizzle-orm/pg-core` for schema definitions since DuckDB's 
 
 ```typescript
 import { sql } from 'drizzle-orm';
-import { integer, text, boolean, timestamp, pgTable, pgSchema } from 'drizzle-orm/pg-core';
+import {
+  integer,
+  text,
+  boolean,
+  timestamp,
+  pgTable,
+  pgSchema,
+} from 'drizzle-orm/pg-core';
 
 // Tables in default schema
 const posts = pgTable('posts', {
@@ -189,10 +196,15 @@ All standard Drizzle query methods work:
 
 ```typescript
 // Select
-const users = await db.select().from(usersTable).where(eq(usersTable.active, true));
+const users = await db
+  .select()
+  .from(usersTable)
+  .where(eq(usersTable.active, true));
 
 // Insert
-await db.insert(usersTable).values({ name: 'Alice', email: 'alice@example.com' });
+await db
+  .insert(usersTable)
+  .values({ name: 'Alice', email: 'alice@example.com' });
 
 // Insert with returning
 const inserted = await db
@@ -201,7 +213,10 @@ const inserted = await db
   .returning({ id: usersTable.id });
 
 // Update
-await db.update(usersTable).set({ name: 'Updated' }).where(eq(usersTable.id, 1));
+await db
+  .update(usersTable)
+  .set({ name: 'Updated' })
+  .where(eq(usersTable.id, 1));
 
 // Delete
 await db.delete(usersTable).where(eq(usersTable.id, 1));
@@ -228,7 +243,9 @@ const results = await db
 const results = await db
   .select()
   .from(products)
-  .where(duckDbArrayContained(products.tags, ['electronics', 'sale', 'featured']));
+  .where(
+    duckDbArrayContained(products.tags, ['electronics', 'sale', 'featured'])
+  );
 
 // Check if arrays overlap
 const results = await db
@@ -307,14 +324,14 @@ const db = drizzle(connection, {
 
 This connector aims for compatibility with Drizzle's Postgres driver but has some differences:
 
-| Feature | Status |
-|---------|--------|
-| Basic CRUD operations | Full support |
-| Joins and subqueries | Full support |
-| Transactions | No savepoints (nested transactions reuse outer) |
-| JSON/JSONB columns | Use `duckDbJson()` instead |
-| Prepared statements | No statement caching |
-| Streaming results | Results are materialized |
+| Feature               | Status                                          |
+| --------------------- | ----------------------------------------------- |
+| Basic CRUD operations | Full support                                    |
+| Joins and subqueries  | Full support                                    |
+| Transactions          | No savepoints (nested transactions reuse outer) |
+| JSON/JSONB columns    | Use `duckDbJson()` instead                      |
+| Prepared statements   | No statement caching                            |
+| Streaming results     | Results are materialized                        |
 
 See [Limitations Documentation](./docs/limitations.md) for details.
 
@@ -323,6 +340,7 @@ See [Limitations Documentation](./docs/limitations.md) for details.
 - **[MotherDuck NYC Taxi](./example/motherduck-nyc.ts)** — Query the built-in NYC taxi dataset from MotherDuck cloud
 
 Run examples:
+
 ```bash
 MOTHERDUCK_TOKEN=your_token bun example/motherduck-nyc.ts
 ```

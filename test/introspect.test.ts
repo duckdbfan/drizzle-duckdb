@@ -69,7 +69,9 @@ test('introspects duckdb catalog and maps duckdb-specific types', async () => {
     `duckDbTimestamp("created_at", { withTimezone: true })`
   );
   expect(schemaTs).toContain(`primaryKey({ columns: [t.id]`);
-  expect(schemaTs).toContain(`foreignKey({ columns: [t.parentId], foreignColumns: [parents.id]`);
+  expect(schemaTs).toContain(
+    `foreignKey({ columns: [t.parentId], foreignColumns: [parents.id]`
+  );
   expect(schemaTs).toContain(`.on(t.uniquePair, t.parentId)`);
 
   const itemsTable = result.files.metaJson.find(
@@ -77,8 +79,8 @@ test('introspects duckdb catalog and maps duckdb-specific types', async () => {
   );
 
   expect(itemsTable?.columns.length).toBeGreaterThanOrEqual(5);
-  expect(
-    itemsTable?.constraints.some((c) => c.type === 'FOREIGN KEY')
-  ).toBe(true);
+  expect(itemsTable?.constraints.some((c) => c.type === 'FOREIGN KEY')).toBe(
+    true
+  );
   expect(itemsTable?.constraints.some((c) => c.type === 'UNIQUE')).toBe(true);
 });

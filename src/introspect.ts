@@ -466,17 +466,17 @@ function emitConstraints(
           .map((col) => `t.${toIdentifier(col)}`)
           .join(', ')}], name: ${JSON.stringify(constraint.name)} })`
       );
-    } else if (
-      constraint.type === 'UNIQUE' &&
-      constraint.columns.length > 1
-    ) {
+    } else if (constraint.type === 'UNIQUE' && constraint.columns.length > 1) {
       imports.pgCore.add('unique');
       entries.push(
         `${key}: unique(${JSON.stringify(constraint.name)}).on(${constraint.columns
           .map((col) => `t.${toIdentifier(col)}`)
           .join(', ')})`
       );
-    } else if (constraint.type === 'FOREIGN KEY' && constraint.referencedTable) {
+    } else if (
+      constraint.type === 'FOREIGN KEY' &&
+      constraint.referencedTable
+    ) {
       imports.pgCore.add('foreignKey');
       const targetTable = toIdentifier(constraint.referencedTable.name);
       entries.push(
@@ -546,7 +546,10 @@ function buildDefault(defaultValue: string | null): string {
   if (/^nextval\(/i.test(trimmed)) {
     return `.default(sql\`${trimmed}\`)`;
   }
-  if (/^current_timestamp(?:\(\))?$/i.test(trimmed) || /^now\(\)$/i.test(trimmed)) {
+  if (
+    /^current_timestamp(?:\(\))?$/i.test(trimmed) ||
+    /^now\(\)$/i.test(trimmed)
+  ) {
     return `.defaultNow()`;
   }
   if (trimmed === 'true' || trimmed === 'false') {
@@ -894,9 +897,7 @@ function renderImports(imports: ImportBuckets, importBasePath: string): string {
   const pgCore = [...imports.pgCore];
   if (pgCore.length) {
     lines.push(
-      `import { ${pgCore
-        .sort()
-        .join(', ')} } from 'drizzle-orm/pg-core';`
+      `import { ${pgCore.sort().join(', ')} } from 'drizzle-orm/pg-core';`
     );
   }
 

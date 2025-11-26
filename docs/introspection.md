@@ -10,35 +10,39 @@ bunx duckdb-introspect --url ./my-database.duckdb --out ./drizzle/schema.ts
 
 ### Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--url` | DuckDB database path (`:memory:`, `./file.duckdb`, `md:`) | Required |
-| `--database`, `--db` | Database/catalog to introspect | Current database |
-| `--all-databases` | Introspect all attached databases | `false` |
-| `--schema` | Comma-separated schema names to introspect | All non-system schemas |
-| `--out` | Output file path | `./drizzle/schema.ts` |
-| `--include-views` | Include views in generated schema | `false` |
-| `--use-pg-time` | Use pg-core timestamp/date/time instead of DuckDB helpers | `false` |
-| `--import-base` | Custom import path for DuckDB column helpers | Package name |
+| Option               | Description                                               | Default                |
+| -------------------- | --------------------------------------------------------- | ---------------------- |
+| `--url`              | DuckDB database path (`:memory:`, `./file.duckdb`, `md:`) | Required               |
+| `--database`, `--db` | Database/catalog to introspect                            | Current database       |
+| `--all-databases`    | Introspect all attached databases                         | `false`                |
+| `--schema`           | Comma-separated schema names to introspect                | All non-system schemas |
+| `--out`              | Output file path                                          | `./drizzle/schema.ts`  |
+| `--include-views`    | Include views in generated schema                         | `false`                |
+| `--use-pg-time`      | Use pg-core timestamp/date/time instead of DuckDB helpers | `false`                |
+| `--import-base`      | Custom import path for DuckDB column helpers              | Package name           |
 
 ### Examples
 
 **Local database:**
+
 ```bash
 bunx duckdb-introspect --url ./analytics.duckdb --out ./src/schema.ts
 ```
 
 **Specific schemas:**
+
 ```bash
 bunx duckdb-introspect --url ./db.duckdb --schema public,analytics --out ./schema.ts
 ```
 
 **Include views:**
+
 ```bash
 bunx duckdb-introspect --url ./db.duckdb --include-views --out ./schema.ts
 ```
 
 **MotherDuck:**
+
 ```bash
 MOTHERDUCK_TOKEN=your_token bunx duckdb-introspect --url md: --database my_cloud_db --out ./schema.ts
 ```
@@ -211,13 +215,17 @@ export const events = analyticsSchema.table('events', {
   createdAt: duckDbTimestamp('created_at').defaultNow(),
 });
 
-export const users = analyticsSchema.table('users', {
-  id: integer('id').primaryKey(),
-  email: varchar('email', { length: 255 }).notNull(),
-  metadata: duckDbStruct('metadata', { plan: 'TEXT', active: 'BOOLEAN' }),
-}, (t) => ({
-  emailUnique: t.email.unique('users_email_unique'),
-}));
+export const users = analyticsSchema.table(
+  'users',
+  {
+    id: integer('id').primaryKey(),
+    email: varchar('email', { length: 255 }).notNull(),
+    metadata: duckDbStruct('metadata', { plan: 'TEXT', active: 'BOOLEAN' }),
+  },
+  (t) => ({
+    emailUnique: t.email.unique('users_email_unique'),
+  })
+);
 ```
 
 ## Type Mappings
@@ -226,53 +234,53 @@ The introspector maps DuckDB types to Drizzle column builders:
 
 ### Numeric Types
 
-| DuckDB Type | Drizzle Builder |
-|-------------|-----------------|
-| `TINYINT`, `SMALLINT`, `INT2` | `integer()` |
-| `INTEGER`, `INT`, `INT4` | `integer()` |
-| `BIGINT`, `INT8` | `bigint()` |
-| `REAL`, `FLOAT4` | `real()` |
-| `DOUBLE`, `FLOAT` | `doublePrecision()` |
-| `DECIMAL(p,s)`, `NUMERIC(p,s)` | `numeric()` |
+| DuckDB Type                    | Drizzle Builder     |
+| ------------------------------ | ------------------- |
+| `TINYINT`, `SMALLINT`, `INT2`  | `integer()`         |
+| `INTEGER`, `INT`, `INT4`       | `integer()`         |
+| `BIGINT`, `INT8`               | `bigint()`          |
+| `REAL`, `FLOAT4`               | `real()`            |
+| `DOUBLE`, `FLOAT`              | `doublePrecision()` |
+| `DECIMAL(p,s)`, `NUMERIC(p,s)` | `numeric()`         |
 
 ### String Types
 
-| DuckDB Type | Drizzle Builder |
-|-------------|-----------------|
-| `TEXT`, `STRING` | `text()` |
-| `VARCHAR(n)` | `varchar({ length: n })` |
-| `CHAR(n)` | `char({ length: n })` |
+| DuckDB Type      | Drizzle Builder          |
+| ---------------- | ------------------------ |
+| `TEXT`, `STRING` | `text()`                 |
+| `VARCHAR(n)`     | `varchar({ length: n })` |
+| `CHAR(n)`        | `char({ length: n })`    |
 
 ### Date/Time Types
 
-| DuckDB Type | Drizzle Builder |
-|-------------|-----------------|
-| `TIMESTAMP` | `duckDbTimestamp()` or `timestamp()` |
+| DuckDB Type                | Drizzle Builder                           |
+| -------------------------- | ----------------------------------------- |
+| `TIMESTAMP`                | `duckDbTimestamp()` or `timestamp()`      |
 | `TIMESTAMP WITH TIME ZONE` | `duckDbTimestamp({ withTimezone: true })` |
-| `DATE` | `duckDbDate()` or `date()` |
-| `TIME` | `duckDbTime()` or `time()` |
+| `DATE`                     | `duckDbDate()` or `date()`                |
+| `TIME`                     | `duckDbTime()` or `time()`                |
 
 Use `--use-pg-time` to generate standard pg-core types instead of DuckDB helpers.
 
 ### DuckDB-Specific Types
 
-| DuckDB Type | Drizzle Builder |
-|-------------|-----------------|
-| `type[]` (list) | `duckDbList('name', 'TYPE')` |
+| DuckDB Type       | Drizzle Builder                  |
+| ----------------- | -------------------------------- |
+| `type[]` (list)   | `duckDbList('name', 'TYPE')`     |
 | `type[n]` (array) | `duckDbArray('name', 'TYPE', n)` |
-| `STRUCT(...)` | `duckDbStruct('name', { ... })` |
-| `MAP(K, V)` | `duckDbMap('name', 'V')` |
-| `JSON` | `duckDbJson('name')` |
-| `BLOB`, `BYTEA` | `duckDbBlob('name')` |
-| `INET` | `duckDbInet('name')` |
-| `INTERVAL` | `duckDbInterval('name')` |
+| `STRUCT(...)`     | `duckDbStruct('name', { ... })`  |
+| `MAP(K, V)`       | `duckDbMap('name', 'V')`         |
+| `JSON`            | `duckDbJson('name')`             |
+| `BLOB`, `BYTEA`   | `duckDbBlob('name')`             |
+| `INET`            | `duckDbInet('name')`             |
+| `INTERVAL`        | `duckDbInterval('name')`         |
 
 ### Other Types
 
-| DuckDB Type | Drizzle Builder |
-|-------------|-----------------|
-| `BOOLEAN`, `BOOL` | `boolean()` |
-| `UUID` | `uuid()` |
+| DuckDB Type       | Drizzle Builder |
+| ----------------- | --------------- |
+| `BOOLEAN`, `BOOL` | `boolean()`     |
+| `UUID`            | `uuid()`        |
 
 Unrecognized types fall back to `text()` with a `/* TODO */` comment.
 

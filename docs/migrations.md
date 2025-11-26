@@ -177,7 +177,10 @@ async function runMigrations() {
       FROM information_schema.tables
       WHERE table_schema = 'main'
     `);
-    console.log('Tables:', tables.map(t => t.table_name));
+    console.log(
+      'Tables:',
+      tables.map((t) => t.table_name)
+    );
   } finally {
     connection.closeSync();
   }

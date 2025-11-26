@@ -52,8 +52,8 @@ export class DuckDBDialect extends PgDialect {
 
     const migrationTableCreate = sql`
       CREATE TABLE IF NOT EXISTS ${sql.identifier(migrationsSchema)}.${sql.identifier(
-      migrationsTable
-    )} (
+        migrationsTable
+      )} (
         id integer PRIMARY KEY default nextval('${sql.raw(sequenceLiteral)}'),
         hash text NOT NULL,
         created_at bigint

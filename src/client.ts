@@ -65,10 +65,7 @@ export async function closeClientConnection(
     return;
   }
 
-  if (
-    'closeSync' in connection &&
-    typeof connection.closeSync === 'function'
-  ) {
+  if ('closeSync' in connection && typeof connection.closeSync === 'function') {
     connection.closeSync();
     return;
   }

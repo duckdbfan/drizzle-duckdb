@@ -43,14 +43,18 @@ async function main() {
   const motherDuckToken = process.env.MOTHERDUCK_TOKEN;
   if (!motherDuckToken) {
     console.error('MOTHERDUCK_TOKEN environment variable is required');
-    console.error('Usage: MOTHERDUCK_TOKEN=your_token bun run example/motherduck-nyc-taxi.ts');
+    console.error(
+      'Usage: MOTHERDUCK_TOKEN=your_token bun run example/motherduck-nyc-taxi.ts'
+    );
     process.exit(1);
   }
 
   console.log('Connecting to MotherDuck...\n');
 
   // Connect to MotherDuck by passing the token in the config
-  const instance = await DuckDBInstance.create('md:', { motherduck_token: motherDuckToken });
+  const instance = await DuckDBInstance.create('md:', {
+    motherduck_token: motherDuckToken,
+  });
   let connection: DuckDBConnection | undefined;
 
   try {
@@ -203,18 +207,23 @@ async function main() {
     `);
 
     const stats = summary[0] as any;
-    console.log(`  Total trips:     ${Number(stats.total_trips).toLocaleString()}`);
-    console.log(`  Total revenue:   $${Number(stats.total_revenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    console.log(
+      `  Total trips:     ${Number(stats.total_trips).toLocaleString()}`
+    );
+    console.log(
+      `  Total revenue:   $${Number(stats.total_revenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    );
     console.log(`  Average fare:    $${Number(stats.avg_fare).toFixed(2)}`);
     console.log(`  Median fare:     $${Number(stats.median_fare).toFixed(2)}`);
     console.log(`  Average tip:     $${Number(stats.avg_tip).toFixed(2)}`);
-    console.log(`  Average distance: ${Number(stats.avg_distance).toFixed(2)} miles`);
+    console.log(
+      `  Average distance: ${Number(stats.avg_distance).toFixed(2)} miles`
+    );
     console.log(`  Max fare:        $${Number(stats.max_fare).toFixed(2)}`);
 
     console.log('\n' + '='.repeat(60));
     console.log('NYC Taxi analysis completed successfully!');
     console.log('='.repeat(60));
-
   } finally {
     connection?.closeSync();
     instance.closeSync();

@@ -245,6 +245,7 @@ export async function withDb<T>(
 Here's a complete example of a Next.js app with DuckDB:
 
 **`next.config.js`**:
+
 ```javascript
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -254,6 +255,7 @@ module.exports = nextConfig;
 ```
 
 **`lib/schema.ts`**:
+
 ```typescript
 import { pgTable, integer, text, timestamp } from 'drizzle-orm/pg-core';
 
@@ -266,6 +268,7 @@ export const users = pgTable('users', {
 ```
 
 **`lib/db.ts`**:
+
 ```typescript
 import { DuckDBInstance } from '@duckdb/node-api';
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
@@ -284,6 +287,7 @@ export async function getDb() {
 ```
 
 **`app/api/users/route.ts`**:
+
 ```typescript
 import { getDb } from '@/lib/db';
 import { users } from '@/lib/schema';

@@ -2,16 +2,25 @@ import { DuckDBInstance } from '@duckdb/node-api';
 import type { DuckDBConnection } from '@duckdb/node-api';
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
 import { sql } from 'drizzle-orm';
-import { doublePrecision, integer, pgTable, timestamp } from 'drizzle-orm/pg-core';
+import {
+  doublePrecision,
+  integer,
+  pgTable,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 const token = process.env.MOTHERDUCK_TOKEN;
 
 if (!token) {
-  console.error('Set MOTHERDUCK_TOKEN to a valid MotherDuck service token before running this script.');
+  console.error(
+    'Set MOTHERDUCK_TOKEN to a valid MotherDuck service token before running this script.'
+  );
   process.exit(1);
 }
 
-const instance = await DuckDBInstance.create('md:', { motherduck_token: token });
+const instance = await DuckDBInstance.create('md:', {
+  motherduck_token: token,
+});
 let connection: DuckDBConnection | undefined;
 
 try {

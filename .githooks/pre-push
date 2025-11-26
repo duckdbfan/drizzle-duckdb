@@ -5,14 +5,11 @@ set -euo pipefail
 # For full hook support, install pre-commit: https://pre-commit.com/
 
 if ! command -v bun >/dev/null 2>&1; then
-  echo "bun is required" >&2
+  echo "bun is required for tests" >&2
   exit 1
 fi
 
-echo "Checking formatting with Prettier..."
-bunx prettier --check --ignore-unknown .
+echo "Running test suite before push..."
+CI=1 bun run test
 
-echo "Running TypeScript type check..."
-bunx tsc --noEmit --project tsconfig.check.json
-
-echo "Pre-commit checks passed!"
+echo "Pre-push checks passed!"

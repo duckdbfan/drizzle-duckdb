@@ -88,7 +88,10 @@ function normalizeTimestampString(
   return value;
 }
 
-function normalizeTimestamp(value: unknown, withTimezone: boolean): Date | unknown {
+function normalizeTimestamp(
+  value: unknown,
+  withTimezone: boolean
+): Date | unknown {
   if (value instanceof Date) {
     return value;
   }
@@ -96,8 +99,7 @@ function normalizeTimestamp(value: unknown, withTimezone: boolean): Date | unkno
     const hasOffset =
       value.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(value.trim());
     const spaced = value.replace(' ', 'T');
-    const normalized =
-      withTimezone || hasOffset ? spaced : `${spaced}+00`;
+    const normalized = withTimezone || hasOffset ? spaced : `${spaced}+00`;
     return new Date(normalized);
   }
   return value;
@@ -177,9 +179,7 @@ function mapDriverValue(
     if (normalized instanceof Date) {
       return normalized;
     }
-    return decoder.mapFromDriverValue(
-      toDecoderInput(decoder, normalized)
-    );
+    return decoder.mapFromDriverValue(toDecoderInput(decoder, normalized));
   }
 
   if (is(decoder, PgDateString)) {

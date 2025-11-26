@@ -10,9 +10,7 @@ export async function migrate<TSchema extends Record<string, unknown>>(
   config: DuckDbMigrationConfig
 ) {
   const migrationConfig: MigrationConfig =
-    typeof config === 'string'
-      ? { migrationsFolder: config }
-      : config;
+    typeof config === 'string' ? { migrationsFolder: config } : config;
 
   const migrations = readMigrationFiles(migrationConfig);
 

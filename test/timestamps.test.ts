@@ -134,6 +134,8 @@ test('date and time columns round-trip', async () => {
     .from(timestampsTable)
     .where(eq(timestampsTable.id, 3));
 
-  expect(typeof rows[0]?.date === 'string' || rows[0]?.date instanceof Date).toBe(true);
+  expect(
+    typeof rows[0]?.date === 'string' || rows[0]?.date instanceof Date
+  ).toBe(true);
   expect(typeof rows[0]?.time === 'string').toBe(true);
 });
