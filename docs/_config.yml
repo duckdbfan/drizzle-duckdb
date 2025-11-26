@@ -1,0 +1,66 @@
+title: Drizzle DuckDB
+description: DuckDB dialect for Drizzle ORM
+url: https://leonardovida-md.github.io
+baseurl: /drizzle-neo-duckdb
+
+theme: just-the-docs
+remote_theme: just-the-docs/just-the-docs@v0.10.0
+
+# Light theme with optional dark mode toggle
+color_scheme: light
+
+# Logo
+logo: /assets/images/logo.svg
+
+# Search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+
+# Callouts (Just The Docs built-in)
+callouts_level: loud
+callouts:
+  tip:
+    title: Tip
+    color: green
+  warning:
+    title: Warning
+    color: yellow
+  danger:
+    title: Important
+    color: red
+
+# Navigation
+nav_enabled: true
+nav_sort: case_insensitive
+
+# Footer
+footer_content: 'Released under the Apache 2.0 License. Copyright 2024-present.'
+
+# External links
+aux_links:
+  GitHub: https://github.com/leonardovida-md/drizzle-neo-duckdb
+  npm: https://www.npmjs.com/package/@leonardovida-md/drizzle-neo-duckdb
+aux_links_new_tab: true
+
+# Features
+back_to_top: true
+enable_copy_code_button: true
+heading_anchors: true
+
+# Build
+markdown: kramdown
+plugins:
+  - jekyll-seo-tag
+  - jekyll-github-metadata
+  - jekyll-include-cache
+
+exclude:
+  - node_modules/
+  - .vitepress/
+  - guide/
+  - Gemfile.lock
+
+include:
+  - llms.txt

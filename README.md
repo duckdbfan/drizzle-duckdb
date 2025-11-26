@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/@leonardovida-md/drizzle-neo-duckdb)](https://www.npmjs.com/package/@leonardovida-md/drizzle-neo-duckdb)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-[Documentation](./docs) • [Examples](./example) • [Contributing](#contributing)
+[Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/) • [Examples](./example) • [Contributing](#contributing)
 
 </div>
 
@@ -188,7 +188,7 @@ const products = pgTable('products', {
 });
 ```
 
-See [Column Types Documentation](./docs/columns.md) for complete reference.
+See [Column Types Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/api/columns) for complete reference.
 
 ## Querying
 
@@ -275,7 +275,7 @@ import { migrate } from '@leonardovida-md/drizzle-neo-duckdb';
 await migrate(db, { migrationsFolder: './drizzle' });
 ```
 
-Migration metadata is stored in `drizzle.__drizzle_migrations` by default. See [Migrations Documentation](./docs/migrations.md) for configuration options.
+Migration metadata is stored in `drizzle.__drizzle_migrations` by default. See [Migrations Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/guide/migrations) for configuration options.
 
 ## Schema Introspection
 
@@ -300,7 +300,7 @@ const result = await introspect(db, {
 console.log(result.files.schemaTs);
 ```
 
-See [Introspection Documentation](./docs/introspection.md) for all options.
+See [Introspection Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/guide/introspection) for all options.
 
 ## Configuration Options
 
@@ -324,16 +324,16 @@ const db = drizzle(connection, {
 
 This connector aims for compatibility with Drizzle's Postgres driver but has some differences:
 
-| Feature               | Status                                          |
-| --------------------- | ----------------------------------------------- |
-| Basic CRUD operations | Full support                                    |
-| Joins and subqueries  | Full support                                    |
-| Transactions          | No savepoints (nested transactions reuse outer) |
-| JSON/JSONB columns    | Use `duckDbJson()` instead                      |
-| Prepared statements   | No statement caching                            |
-| Streaming results     | Results are materialized                        |
+| Feature               | Status                                                     |
+| --------------------- | ---------------------------------------------------------- |
+| Basic CRUD operations | Full support                                               |
+| Joins and subqueries  | Full support                                               |
+| Transactions          | No savepoints (nested transactions reuse outer)            |
+| JSON/JSONB columns    | Use `duckDbJson()` instead                                 |
+| Prepared statements   | No statement caching                                       |
+| Streaming results     | Materialized by default; use `executeBatches()` for chunks |
 
-See [Limitations Documentation](./docs/limitations.md) for details.
+See [Limitations Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/guide/limitations) for details.
 
 ## Examples
 

@@ -12,6 +12,7 @@ import {
   type TablesRelationalConfig,
 } from 'drizzle-orm/relations';
 import { type DrizzleConfig } from 'drizzle-orm/utils';
+import type { SQL } from 'drizzle-orm/sql/sql';
 import type {
   DuckDBClientLike,
   DuckDBQueryResultHKT,
@@ -21,6 +22,7 @@ import { DuckDBSession } from './session.ts';
 import { DuckDBDialect } from './dialect.ts';
 import { DuckDBSelectBuilder } from './select-builder.ts';
 import { aliasFields } from './sql/selection.ts';
+import type { ExecuteInBatchesOptions, RowData } from './client.ts';
 
 export interface PgDriverOptions {
   logger?: Logger;
@@ -122,6 +124,17 @@ export class DuckDBDatabase<
       session: this.session as unknown as PgSession<DuckDBQueryResultHKT>,
       dialect: this.dialect,
     });
+  }
+
+  executeBatches<T extends RowData = RowData>(
+    query: SQL,
+    options: ExecuteInBatchesOptions = {}
+  ): AsyncGenerator<T[], void, void> {
+    return this.session.executeBatches<T>(query, options);
+  }
+
+  executeArrow(query: SQL): Promise<unknown> {
+    return this.session.executeArrow(query);
   }
 
   override async transaction<T>(

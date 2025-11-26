@@ -1,0 +1,117 @@
+# Drizzle DuckDB
+
+> DuckDB dialect for Drizzle ORM - Type-safe DuckDB for TypeScript
+
+## Overview
+
+Drizzle DuckDB is a DuckDB dialect adapter for Drizzle ORM. It provides type-safe queries, DuckDB-native types (STRUCT, MAP, LIST, JSON), Postgres compatibility, and analytical query support.
+
+## Installation
+
+```bash
+npm install @leonardovida-md/drizzle-neo-duckdb drizzle-orm @duckdb/node-api
+```
+
+## Quick Start
+
+```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
+import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
+import { pgTable, integer, text } from 'drizzle-orm/pg-core';
+
+const users = pgTable('users', {
+  id: integer('id').primaryKey(),
+  name: text('name').notNull(),
+});
+
+const instance = await DuckDBInstance.create(':memory:');
+const connection = await instance.connect();
+const db = drizzle(connection);
+
+const allUsers = await db.select().from(users);
+```
+
+## Key Features
+
+- Type-safe queries with full TypeScript inference
+- DuckDB-specific types: duckDbList, duckDbArray, duckDbStruct, duckDbMap, duckDbJson
+- Array query helpers: duckDbArrayContains, duckDbArrayContained, duckDbArrayOverlaps
+- Migrations and schema introspection
+- MotherDuck cloud support
+
+## Important Notes
+
+- Do NOT use Postgres json or jsonb columns - use duckDbJson() instead
+- DuckDB doesn't support SAVEPOINT for nested transactions
+- Array operators are automatically rewritten to DuckDB functions
+
+## Documentation
+
+- Getting Started: /drizzle-neo-duckdb/getting-started/
+- Core Concepts: /drizzle-neo-duckdb/core/
+- API Reference: /drizzle-neo-duckdb/api/
+- Examples: /drizzle-neo-duckdb/examples/
+
+## DuckDB-Specific Column Types
+
+Import from '@leonardovida-md/drizzle-neo-duckdb':
+
+- duckDbList - Variable length arrays (LIST)
+- duckDbArray - Fixed length arrays (ARRAY)
+- duckDbStruct - Named field structures (STRUCT)
+- duckDbMap - Key-value pairs (MAP)
+- duckDbJson - JSON data (use instead of pg json/jsonb)
+- duckDbTimestamp - Timestamps with proper DuckDB handling
+- duckDbDate - Date values
+- duckDbTime - Time values
+- duckDbBlob - Binary data
+- duckDbInet - IP addresses
+- duckDbInterval - Time intervals
+
+## Array Query Helpers
+
+- duckDbArrayContains(column, values) - Check if array contains ALL values
+- duckDbArrayContained(column, values) - Check if array is contained by values
+- duckDbArrayOverlaps(column, values) - Check if arrays have ANY common elements
+
+## Migrations
+
+```typescript
+import { migrate } from '@leonardovida-md/drizzle-neo-duckdb';
+
+await migrate(db, {
+  migrationsFolder: './drizzle',
+  migrationsSchema: 'drizzle',
+});
+```
+
+## Schema Introspection
+
+```typescript
+import { introspect } from '@leonardovida-md/drizzle-neo-duckdb';
+
+const result = await introspect(db, {
+  schemas: ['main'],
+  includeViews: true,
+});
+
+// result.files.schemaTs contains generated TypeScript schema
+```
+
+## MotherDuck Connection
+
+```typescript
+const instance = await DuckDBInstance.create('md:', {
+  motherduck_token: process.env.MOTHERDUCK_TOKEN,
+});
+const connection = await instance.connect();
+const db = drizzle(connection);
+```
+
+## Links
+
+- GitHub: https://github.com/leonardovida-md/drizzle-neo-duckdb
+- npm: https://www.npmjs.com/package/@leonardovida-md/drizzle-neo-duckdb
+- Documentation: https://leonardovida-md.github.io/drizzle-neo-duckdb/
+- DuckDB: https://duckdb.org/
+- Drizzle ORM: https://orm.drizzle.team/

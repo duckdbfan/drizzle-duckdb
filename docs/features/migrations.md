@@ -1,3 +1,10 @@
+---
+layout: default
+title: Migrations
+parent: Features
+nav_order: 1
+---
+
 # Migrations
 
 Drizzle DuckDB supports running SQL migration files against your DuckDB database using the `migrate` function.
@@ -89,8 +96,8 @@ await migrate(db, {
 
 ## How It Works
 
-1. **Creates schema** — The migrations schema is created if it doesn't exist
-2. **Creates tracking table** — A table stores which migrations have been applied:
+1. **Creates schema** - The migrations schema is created if it doesn't exist
+2. **Creates tracking table** - A table stores which migrations have been applied:
    ```sql
    CREATE TABLE drizzle.__drizzle_migrations (
      id INTEGER PRIMARY KEY,
@@ -98,9 +105,9 @@ await migrate(db, {
      created_at BIGINT
    )
    ```
-3. **Creates sequence** — A sequence generates migration IDs
-4. **Runs migrations** — Each new migration runs in a transaction
-5. **Records completion** — Successful migrations are recorded in the tracking table
+3. **Creates sequence** - A sequence generates migration IDs
+4. **Runs migrations** - Each new migration runs in a transaction
+5. **Records completion** - Successful migrations are recorded in the tracking table
 
 ## Migration Tracking
 
@@ -113,6 +120,8 @@ The driver tracks migrations using a hash of each migration file. This means:
 To check which migrations have been applied:
 
 ```typescript
+import { sql } from 'drizzle-orm';
+
 const applied = await db.execute(sql`
   SELECT hash, created_at
   FROM drizzle.__drizzle_migrations
@@ -148,9 +157,13 @@ Then apply them with this package:
 await migrate(db, './drizzle');
 ```
 
-> **Note:** Some generated SQL may need manual adjustment for DuckDB compatibility. Check the generated files before applying.
+{: .warning }
 
-## Example: Full Migration Setup
+> **Note**
+>
+> Some generated SQL may need manual adjustment for DuckDB compatibility. Check the generated files before applying.
+
+## Full Example
 
 ```typescript
 import { DuckDBInstance } from '@duckdb/node-api';

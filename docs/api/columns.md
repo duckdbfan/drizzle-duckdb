@@ -1,10 +1,17 @@
+---
+layout: default
+title: Column Types
+parent: API Reference
+nav_order: 3
+---
+
 # Column Types
 
 Drizzle DuckDB supports all standard Postgres column types from `drizzle-orm/pg-core` plus custom helpers for DuckDB-specific types.
 
 ## Standard Column Types
 
-Use these from `drizzle-orm/pg-core` — they work with DuckDB:
+Use these from `drizzle-orm/pg-core` - they work with DuckDB:
 
 ```typescript
 import {
@@ -219,7 +226,11 @@ const events = pgTable('events', {
 });
 ```
 
-> **Important:** Postgres `json` and `jsonb` columns from `drizzle-orm/pg-core` are **not supported**. The driver will throw an error if you use them. Always use `duckDbJson()` instead.
+{: .warning }
+
+> **Important**
+>
+> Postgres `json` and `jsonb` columns from `drizzle-orm/pg-core` are **not supported**. The driver will throw an error if you use them. Always use `duckDbJson()` instead.
 
 **Usage:**
 
@@ -261,8 +272,8 @@ const events = pgTable('events', {
 
 **Modes:**
 
-- `mode: 'date'` (default) — Returns JavaScript `Date` objects
-- `mode: 'string'` — Returns ISO-formatted strings like `'2024-01-15 10:30:00+00'`
+- `mode: 'date'` (default) - Returns JavaScript `Date` objects
+- `mode: 'string'` - Returns ISO-formatted strings like `'2024-01-15 10:30:00+00'`
 
 **Usage:**
 

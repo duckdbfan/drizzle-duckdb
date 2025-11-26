@@ -1,3 +1,4 @@
+action-bench.json
 node_modules
 .vscode
 dist
@@ -5,3 +6,28 @@ do.ts
 do2.ts
 .env
 .env.local
+
+# VitePress
+docs/.vitepress/cache
+docs/.vitepress/dist
+
+# Jekyll
+docs/_site
+docs/.sass-cache
+docs/.jekyll-cache
+docs/.jekyll-metadata
+docs/vendor
+docs/.bundle
+docs/Gemfile.lock
+docs/.ruby-version
+perf-results
+.bench-cache
+
+# TypeScript
+*.tsbuildinfo
+*.js.map
+*.d.ts.map
+.tsc
+coverage
+*.log
+test/.tmp

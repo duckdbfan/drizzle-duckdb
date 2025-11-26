@@ -1,0 +1,91 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.2'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Restore benchmark history
+        id: bench-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: .bench-cache/benchmark-data.json
+          key: bench-${{ runner.os }}-${{ github.event_name == 'pull_request' && 'pr' || 'main' }}-${{ github.run_id }}
+          restore-keys: |
+            bench-${{ runner.os }}-main-
+
+      - name: Ensure benchmark cache dir
+        run: mkdir -p .bench-cache
+
+      - name: Seed empty benchmark history if missing
+        run: |
+          if [ ! -f .bench-cache/benchmark-data.json ]; then
+            echo "[]" > .bench-cache/benchmark-data.json
+          fi
+
+      - name: Run perf benchmarks
+        run: bun run perf:run -- --gha-output action-bench.json
+
+      - name: Upload raw perf artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: |
+            action-bench.json
+            perf-results/*.json
+          if-no-files-found: error
+
+      - name: Benchmark report (with comments)
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.fork == false
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customBiggerIsBetter'
+          output-file-path: action-bench.json
+          external-data-json-path: .bench-cache/benchmark-data.json
+          alert-threshold: '5%'
+          fail-on-alert: true
+          comment-on-alert: true
+          comment-always: true
+          summary-always: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Benchmark report (no comments for forks)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customBiggerIsBetter'
+          output-file-path: action-bench.json
+          external-data-json-path: .bench-cache/benchmark-data.json
+          alert-threshold: '5%'
+          fail-on-alert: true
+          comment-on-alert: false
+          comment-always: false
+          summary-always: true
+
+      - name: Save benchmark history (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .bench-cache/benchmark-data.json
+          key: bench-${{ runner.os }}-main-${{ github.run_id }}

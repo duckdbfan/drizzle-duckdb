@@ -1,3 +1,10 @@
+---
+layout: default
+title: Introspection
+parent: Features
+nav_order: 2
+---
+
 # Schema Introspection
 
 Generate Drizzle schema definitions from an existing DuckDB database using the introspection CLI or programmatic API.
@@ -80,8 +87,6 @@ Use `--all-databases` to introspect tables from all attached databases (use with
 bunx duckdb-introspect --url md: --all-databases --out ./schema.ts
 ```
 
-This is useful when you intentionally want to generate schemas for multiple databases, but be aware that this may include shared databases and sample data.
-
 ## Programmatic API
 
 ```typescript
@@ -106,12 +111,10 @@ connection.closeSync();
 
 ```typescript
 interface IntrospectOptions {
-  // Database/catalog to introspect (default: current database via current_database())
-  // This prevents returning tables from all attached databases in MotherDuck
+  // Database/catalog to introspect (default: current database)
   database?: string;
 
   // When true, introspects all attached databases (default: false)
-  // Ignored if `database` is explicitly set
   allDatabases?: boolean;
 
   // Schemas to introspect (default: all non-system schemas)
@@ -129,24 +132,6 @@ interface IntrospectOptions {
   // Custom import path for helpers (default: package name)
   importBasePath?: string;
 }
-```
-
-### Programmatic Database Filtering
-
-```typescript
-// Default: introspect current database only
-const result = await introspect(db);
-
-// Specific database
-const result = await introspect(db, {
-  database: 'my_analytics_db',
-  schemas: ['main'],
-});
-
-// All databases (use with caution)
-const result = await introspect(db, {
-  allDatabases: true,
-});
 ```
 
 ### Return Value
@@ -230,18 +215,16 @@ export const users = analyticsSchema.table(
 
 ## Type Mappings
 
-The introspector maps DuckDB types to Drizzle column builders:
-
 ### Numeric Types
 
-| DuckDB Type                    | Drizzle Builder     |
-| ------------------------------ | ------------------- |
-| `TINYINT`, `SMALLINT`, `INT2`  | `integer()`         |
-| `INTEGER`, `INT`, `INT4`       | `integer()`         |
-| `BIGINT`, `INT8`               | `bigint()`          |
-| `REAL`, `FLOAT4`               | `real()`            |
-| `DOUBLE`, `FLOAT`              | `doublePrecision()` |
-| `DECIMAL(p,s)`, `NUMERIC(p,s)` | `numeric()`         |
+| DuckDB Type           | Drizzle Builder     |
+| --------------------- | ------------------- |
+| `TINYINT`, `SMALLINT` | `integer()`         |
+| `INTEGER`, `INT`      | `integer()`         |
+| `BIGINT`              | `bigint()`          |
+| `REAL`, `FLOAT4`      | `real()`            |
+| `DOUBLE`, `FLOAT`     | `doublePrecision()` |
+| `DECIMAL(p,s)`        | `numeric()`         |
 
 ### String Types
 
@@ -255,12 +238,10 @@ The introspector maps DuckDB types to Drizzle column builders:
 
 | DuckDB Type                | Drizzle Builder                           |
 | -------------------------- | ----------------------------------------- |
-| `TIMESTAMP`                | `duckDbTimestamp()` or `timestamp()`      |
+| `TIMESTAMP`                | `duckDbTimestamp()`                       |
 | `TIMESTAMP WITH TIME ZONE` | `duckDbTimestamp({ withTimezone: true })` |
-| `DATE`                     | `duckDbDate()` or `date()`                |
-| `TIME`                     | `duckDbTime()` or `time()`                |
-
-Use `--use-pg-time` to generate standard pg-core types instead of DuckDB helpers.
+| `DATE`                     | `duckDbDate()`                            |
+| `TIME`                     | `duckDbTime()`                            |
 
 ### DuckDB-Specific Types
 
@@ -271,16 +252,9 @@ Use `--use-pg-time` to generate standard pg-core types instead of DuckDB helpers
 | `STRUCT(...)`     | `duckDbStruct('name', { ... })`  |
 | `MAP(K, V)`       | `duckDbMap('name', 'V')`         |
 | `JSON`            | `duckDbJson('name')`             |
-| `BLOB`, `BYTEA`   | `duckDbBlob('name')`             |
+| `BLOB`            | `duckDbBlob('name')`             |
 | `INET`            | `duckDbInet('name')`             |
 | `INTERVAL`        | `duckDbInterval('name')`         |
-
-### Other Types
-
-| DuckDB Type       | Drizzle Builder |
-| ----------------- | --------------- |
-| `BOOLEAN`, `BOOL` | `boolean()`     |
-| `UUID`            | `uuid()`        |
 
 Unrecognized types fall back to `text()` with a `/* TODO */` comment.
 
@@ -288,26 +262,9 @@ Unrecognized types fall back to `text()` with a `/* TODO */` comment.
 
 The introspector captures:
 
-- **Primary keys** — Single and composite
-- **Foreign keys** — With referenced table and columns
-- **Unique constraints** — Single column and multi-column
-
-## Views
-
-When using `--include-views` or `includeViews: true`, views are introspected as tables. Note that:
-
-- View columns are read-only in practice
-- Complex view expressions may not map perfectly
-- Constraints from underlying tables aren't reflected
-
-## System Schemas
-
-These schemas are automatically excluded:
-
-- `information_schema`
-- `pg_catalog`
-
-To introspect system tables, explicitly list them with `--schema`.
+- **Primary keys** - Single and composite
+- **Foreign keys** - With referenced table and columns
+- **Unique constraints** - Single column and multi-column
 
 ## Workflow Example
 
@@ -319,8 +276,6 @@ To introspect system tables, explicitly list them with `--schema`.
 ```bash
 # Generate schema
 bunx duckdb-introspect --url ./app.duckdb --out ./src/db/schema.ts
-
-# Use in your app
 ```
 
 ```typescript

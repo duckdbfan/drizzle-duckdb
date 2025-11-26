@@ -1,22 +1,29 @@
-# Limitations and Differences
+---
+layout: default
+title: Limitations
+parent: Reference
+nav_order: 2
+---
+
+# Limitations
 
 This page documents known differences between Drizzle DuckDB and Drizzle's standard Postgres driver.
 
 ## Feature Support Matrix
 
-| Feature              | Status  | Notes                               |
-| -------------------- | ------- | ----------------------------------- |
-| Select queries       | Full    | All standard select operations work |
-| Insert/Update/Delete | Full    | Including `.returning()`            |
-| Joins                | Full    | All join types supported            |
-| Subqueries           | Full    |                                     |
-| CTEs (WITH clauses)  | Full    |                                     |
-| Aggregations         | Full    |                                     |
-| Transactions         | Partial | No savepoints                       |
-| Prepared statements  | Partial | No statement caching                |
-| JSON/JSONB columns   | None    | Use `duckDbJson()` instead          |
-| Streaming results    | None    | Results are materialized            |
-| Relational queries   | Full    | With schema configuration           |
+| Feature              | Status  | Notes                                                                      |
+| -------------------- | ------- | -------------------------------------------------------------------------- |
+| Select queries       | Full    | All standard select operations work                                        |
+| Insert/Update/Delete | Full    | Including `.returning()`                                                   |
+| Joins                | Full    | All join types supported                                                   |
+| Subqueries           | Full    |                                                                            |
+| CTEs (WITH clauses)  | Full    |                                                                            |
+| Aggregations         | Full    |                                                                            |
+| Transactions         | Partial | No savepoints                                                              |
+| Prepared statements  | Partial | No statement caching                                                       |
+| JSON/JSONB columns   | None    | Use `duckDbJson()` instead                                                 |
+| Streaming results    | Partial | Default results are materialized; use `executeBatches()` for chunked reads |
+| Relational queries   | Full    | With schema configuration                                                  |
 
 ## Transactions
 
@@ -86,14 +93,21 @@ This has minimal performance impact for most workloads since DuckDB is optimized
 
 ### Materialized Results
 
-All query results are fully materialized in memory. There's no cursor-based streaming:
+All query results are fully materialized in memory by default.
+Use `db.executeBatches()` to process rows in chunks without holding the entire result set:
 
 ```typescript
-// This loads ALL matching rows into memory
-const allUsers = await db.select().from(users);
+for await (const chunk of db.executeBatches(
+  sql`select * from ${users} order by ${users.id}`,
+  { rowsPerChunk: 50_000 } // default: 100_000
+)) {
+  // handle each chunk of rows
+}
 ```
 
-**For large datasets:** Use `LIMIT` and pagination, or leverage DuckDB's native capabilities for large-scale analysis.
+If your runtime exposes an Arrow/columnar API, `db.executeArrow()` will return it; otherwise it falls back to column-major arrays.
+
+**For very large datasets:** Prefer server-side aggregation, `executeBatches()` for incremental reads, or add `LIMIT`/pagination when you genuinely need all rows.
 
 ### Column Alias Deduplication
 
@@ -117,9 +131,9 @@ const result = await db
 
 DuckDB handles timestamps slightly differently than Postgres:
 
-1. **No implicit timezone conversion** — Timestamps without timezone are stored as-is
-2. **String format** — DuckDB uses space separator (`2024-01-15 10:30:00`) rather than `T`
-3. **Offset normalization** — Timezone offsets like `+00` are handled correctly
+1. **No implicit timezone conversion** - Timestamps without timezone are stored as-is
+2. **String format** - DuckDB uses space separator (`2024-01-15 10:30:00`) rather than `T`
+3. **Offset normalization** - Timezone offsets like `+00` are handled correctly
 
 The `duckDbTimestamp()` helper normalizes these differences:
 
@@ -233,12 +247,38 @@ for (const event of manyEvents) {
 
 ### Memory Usage
 
-Results are materialized in memory. For very large result sets:
+Default selects materialize results. For very large result sets prefer `executeBatches()` or limit the result size:
 
 ```typescript
-// Add LIMIT for large tables
-const page = await db.select().from(hugeTable).limit(1000).offset(0);
+for await (const chunk of db.executeBatches(
+  sql`select * from ${hugeTable} order by ${hugeTable.id}`,
+  { rowsPerChunk: 10_000 }
+)) {
+  // process chunk
+}
 ```
+
+## Native Value Binding
+
+### Future Work
+
+Some column types use SQL literals rather than native DuckDB value bindings due to Bun/DuckDB compatibility issues:
+
+- **`duckDbTimestamp`** - Uses SQL literals (e.g., `TIMESTAMP '2024-01-15 10:30:00+00'`) due to bigint handling differences between Bun and Node.js in the DuckDB native bindings
+- **`duckDbStruct`** - Uses `struct_pack(...)` SQL literals to handle nested arrays correctly (empty arrays need type hints that native binding doesn't provide)
+- **`duckDbDate`, `duckDbTime`, `duckDbInterval`** - Use passthrough binding
+
+The following column types **do** use native DuckDB value bindings for improved performance:
+
+- **`duckDbList`** - Uses `DuckDBListValue` for native array binding
+- **`duckDbArray`** - Uses `DuckDBArrayValue` for native array binding
+- **`duckDbMap`** - Uses `DuckDBMapValue` for native map binding
+- **`duckDbBlob`** - Uses `DuckDBBlobValue` for native binary binding
+- **`duckDbJson`** - Uses native string binding with delayed `JSON.stringify()`
+
+### Bun Runtime Notes
+
+When running under Bun, certain DuckDB native bindings behave differently than under Node.js. The driver handles these differences automatically by falling back to SQL literals where needed. All tests pass under both Bun and Node.js.
 
 ## Workarounds Summary
 

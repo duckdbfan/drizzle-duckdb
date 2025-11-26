@@ -1,6 +1,18 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { SQLWrapper } from 'drizzle-orm/sql/sql';
 import { customType } from 'drizzle-orm/pg-core';
+import {
+  wrapList,
+  wrapArray,
+  wrapMap,
+  wrapBlob,
+  wrapJson,
+  type ListValueWrapper,
+  type ArrayValueWrapper,
+  type MapValueWrapper,
+  type BlobValueWrapper,
+  type JsonValueWrapper,
+} from './value-wrappers.ts';
 
 type IntColType =
   | 'SMALLINT'
@@ -160,14 +172,17 @@ export const duckDbList = <TData = unknown>(
   name: string,
   elementType: AnyColType
 ) =>
-  customType<{ data: TData[]; driverData: SQL | unknown[] | string }>({
+  customType<{
+    data: TData[];
+    driverData: ListValueWrapper | unknown[] | string;
+  }>({
     dataType() {
       return `${elementType}[]`;
     },
-    toDriver(value: TData[]) {
-      return buildListLiteral(value, elementType);
+    toDriver(value: TData[]): ListValueWrapper {
+      return wrapList(value, elementType);
     },
-    fromDriver(value: unknown[] | string | SQL): TData[] {
+    fromDriver(value: unknown[] | string | ListValueWrapper): TData[] {
       if (Array.isArray(value)) {
         return value as TData[];
       }
@@ -186,16 +201,19 @@ export const duckDbArray = <TData = unknown>(
   elementType: AnyColType,
   fixedLength?: number
 ) =>
-  customType<{ data: TData[]; driverData: SQL | unknown[] | string }>({
+  customType<{
+    data: TData[];
+    driverData: ArrayValueWrapper | unknown[] | string;
+  }>({
     dataType() {
       return fixedLength
         ? `${elementType}[${fixedLength}]`
         : `${elementType}[]`;
     },
-    toDriver(value: TData[]) {
-      return buildListLiteral(value, elementType);
+    toDriver(value: TData[]): ArrayValueWrapper {
+      return wrapArray(value, elementType, fixedLength);
     },
-    fromDriver(value: unknown[] | string | SQL): TData[] {
+    fromDriver(value: unknown[] | string | ArrayValueWrapper): TData[] {
       if (Array.isArray(value)) {
         return value as TData[];
       }
@@ -213,15 +231,15 @@ export const duckDbMap = <TData extends Record<string, any>>(
   name: string,
   valueType: AnyColType | ListColType | ArrayColType
 ) =>
-  customType<{ data: TData; driverData: TData }>({
+  customType<{ data: TData; driverData: MapValueWrapper | TData }>({
     dataType() {
       return `MAP (STRING, ${valueType})`;
     },
-    toDriver(value: TData) {
-      return buildMapLiteral(value, valueType);
+    toDriver(value: TData): MapValueWrapper {
+      return wrapMap(value, valueType);
     },
-    fromDriver(value: TData): TData {
-      return value;
+    fromDriver(value: TData | MapValueWrapper): TData {
+      return value as TData;
     },
   })(name);
 
@@ -238,6 +256,8 @@ export const duckDbStruct = <TData extends Record<string, any>>(
       return `STRUCT (${fields.join(', ')})`;
     },
     toDriver(value: TData) {
+      // Use SQL literals for structs due to DuckDB type inference issues
+      // with nested empty lists
       return buildStructLiteral(value, schema);
     },
     fromDriver(value: TData | string): TData {
@@ -252,15 +272,24 @@ export const duckDbStruct = <TData extends Record<string, any>>(
     },
   })(name);
 
+/**
+ * JSON column type that wraps values and delays JSON.stringify() to binding time.
+ * This ensures consistent handling with other wrapped types.
+ *
+ * Note: DuckDB stores JSON as VARCHAR internally, so the final binding
+ * is always a stringified JSON value.
+ */
 export const duckDbJson = <TData = unknown>(name: string) =>
-  customType<{ data: TData; driverData: SQL | string }>({
+  customType<{ data: TData; driverData: JsonValueWrapper | SQL | string }>({
     dataType() {
       return 'JSON';
     },
-    toDriver(value: TData) {
+    toDriver(value: TData): JsonValueWrapper | SQL | string {
+      // Pass through strings directly
       if (typeof value === 'string') {
         return value;
       }
+      // Pass through SQL objects (for raw SQL expressions)
       if (
         value !== null &&
         typeof value === 'object' &&
@@ -268,9 +297,10 @@ export const duckDbJson = <TData = unknown>(name: string) =>
       ) {
         return value as unknown as SQL;
       }
-      return JSON.stringify(value ?? null);
+      // Wrap non-string values for delayed stringify at binding time
+      return wrapJson(value);
     },
-    fromDriver(value: SQL | string) {
+    fromDriver(value: SQL | string | JsonValueWrapper) {
       if (typeof value !== 'string') {
         return value as unknown as TData;
       }
@@ -288,14 +318,14 @@ export const duckDbJson = <TData = unknown>(name: string) =>
 
 export const duckDbBlob = customType<{
   data: Buffer;
+  driverData: BlobValueWrapper;
   default: false;
 }>({
   dataType() {
     return 'BLOB';
   },
-  toDriver(value: Buffer) {
-    const hexString = value.toString('hex');
-    return sql`from_hex(${hexString})`;
+  toDriver(value: Buffer): BlobValueWrapper {
+    return wrapBlob(value);
   },
 });
 
@@ -340,6 +370,7 @@ export const duckDbTimestamp = (name: string, options: TimestampOptions = {}) =>
       return `TIMESTAMP${precision}`;
     },
     toDriver(value: Date | string) {
+      // Use SQL literals for timestamps due to Bun/DuckDB bigint binding issues
       const iso = value instanceof Date ? value.toISOString() : value;
       const normalized = iso.replace('T', ' ').replace('Z', '+00');
       const typeKeyword = options.withTimezone ? 'TIMESTAMPTZ' : 'TIMESTAMP';

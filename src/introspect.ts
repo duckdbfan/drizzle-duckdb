@@ -607,7 +607,11 @@ function mapDuckDbType(
 
   if (upper === 'BIGINT' || upper === 'INT8' || upper === 'UBIGINT') {
     imports.pgCore.add('bigint');
-    return { builder: `bigint(${columnName(column.name)})` };
+    // Drizzle's bigint helper requires an explicit mode. Default to 'number'
+    // to mirror DuckDB's typical 64-bit integer behavior in JS.
+    return {
+      builder: `bigint(${columnName(column.name)}, { mode: 'number' })`,
+    };
   }
 
   const decimalMatch = /^DECIMAL\((\d+),(\d+)\)/i.exec(upper);

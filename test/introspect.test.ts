@@ -32,6 +32,7 @@ beforeAll(async () => {
     create table introspect.items (
       id integer primary key default nextval('introspect.items_seq'),
       name text not null,
+      visits bigint not null,
       tags integer[],
       fixed integer[2],
       payload struct("name" varchar, "values" integer[]),
@@ -65,6 +66,7 @@ test('introspects duckdb catalog and maps duckdb-specific types', async () => {
   expect(schemaTs).toContain(`duckDbMap("extras"`);
   expect(schemaTs).toContain(`duckDbList("tags"`);
   expect(schemaTs).toContain(`duckDbArray("fixed"`);
+  expect(schemaTs).toContain(`bigint("visits", { mode: 'number' })`);
   expect(schemaTs).toContain(
     `duckDbTimestamp("created_at", { withTimezone: true })`
   );

@@ -20,7 +20,13 @@ import { mapResultRow } from './sql/result-mapper.ts';
 import type { DuckDBDialect } from './dialect.ts';
 import { TransactionRollbackError } from 'drizzle-orm/errors';
 import type { DuckDBClientLike, RowData } from './client.ts';
-import { executeOnClient, prepareParams } from './client.ts';
+import {
+  executeArrowOnClient,
+  executeInBatches,
+  executeOnClient,
+  prepareParams,
+  type ExecuteInBatchesOptions,
+} from './client.ts';
 
 export type { DuckDBClientLike, RowData } from './client.ts';
 
@@ -194,6 +200,62 @@ export class DuckDBSession<
       []
     );
   };
+
+  executeBatches<T extends RowData = RowData>(
+    query: SQL,
+    options: ExecuteInBatchesOptions = {}
+  ): AsyncGenerator<GenericRowData<T>[], void, void> {
+    const builtQuery = this.dialect.sqlToQuery(query);
+    const params = prepareParams(builtQuery.params, {
+      rejectStringArrayLiterals: this.rejectStringArrayLiterals,
+      warnOnStringArrayLiteral: this.rejectStringArrayLiterals
+        ? undefined
+        : () => this.warnOnStringArrayLiteral(builtQuery.sql),
+    });
+    const rewrittenQuery = this.rewriteArrays
+      ? adaptArrayOperators(builtQuery.sql)
+      : builtQuery.sql;
+
+    if (this.rewriteArrays && rewrittenQuery !== builtQuery.sql) {
+      this.logger.logQuery(
+        `[duckdb] original query before array rewrite: ${builtQuery.sql}`,
+        params
+      );
+    }
+
+    this.logger.logQuery(rewrittenQuery, params);
+
+    return executeInBatches(
+      this.client,
+      rewrittenQuery,
+      params,
+      options
+    ) as AsyncGenerator<GenericRowData<T>[], void, void>;
+  }
+
+  async executeArrow(query: SQL): Promise<unknown> {
+    const builtQuery = this.dialect.sqlToQuery(query);
+    const params = prepareParams(builtQuery.params, {
+      rejectStringArrayLiterals: this.rejectStringArrayLiterals,
+      warnOnStringArrayLiteral: this.rejectStringArrayLiterals
+        ? undefined
+        : () => this.warnOnStringArrayLiteral(builtQuery.sql),
+    });
+    const rewrittenQuery = this.rewriteArrays
+      ? adaptArrayOperators(builtQuery.sql)
+      : builtQuery.sql;
+
+    if (this.rewriteArrays && rewrittenQuery !== builtQuery.sql) {
+      this.logger.logQuery(
+        `[duckdb] original query before array rewrite: ${builtQuery.sql}`,
+        params
+      );
+    }
+
+    this.logger.logQuery(rewrittenQuery, params);
+
+    return executeArrowOnClient(this.client, rewrittenQuery, params);
+  }
 }
 
 type PgTransactionInternals<
@@ -239,6 +301,19 @@ export class DuckDBTransaction<
     return (this as unknown as Tx).session.execute(
       sql`set transaction ${this.getTransactionConfigSQL(config)}`
     );
+  }
+
+  executeBatches<T extends RowData = RowData>(
+    query: SQL,
+    options: ExecuteInBatchesOptions = {}
+  ): AsyncGenerator<GenericRowData<T>[], void, void> {
+    type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
+    return (this as unknown as Tx).session.executeBatches<T>(query, options);
+  }
+
+  executeArrow(query: SQL): Promise<unknown> {
+    type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
+    return (this as unknown as Tx).session.executeArrow(query);
   }
 
   override async transaction<T>(

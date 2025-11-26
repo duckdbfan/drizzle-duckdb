@@ -1,4 +1,11 @@
-# Using with Next.js
+---
+layout: default
+title: Next.js
+parent: Integrations
+nav_order: 1
+---
+
+# Next.js Integration
 
 This guide covers how to use `@leonardovida-md/drizzle-neo-duckdb` with Next.js applications.
 
@@ -41,7 +48,11 @@ For MotherDuck connections, set your token as a server-side environment variable
 MOTHERDUCK_TOKEN=your_token_here
 ```
 
-**Important**: Do NOT prefix with `NEXT_PUBLIC_` as this would expose your token to the client bundle.
+{: .warning }
+
+> **Important**
+>
+> Do NOT prefix with `NEXT_PUBLIC_` as this would expose your token to the client bundle.
 
 ## Creating a Database Client
 
@@ -241,8 +252,6 @@ export async function withDb<T>(
 ```
 
 ## Complete Example
-
-Here's a complete example of a Next.js app with DuckDB:
 
 **`next.config.js`**:
 

@@ -10,7 +10,10 @@
     "build": "bun build --target=node ./src/index.ts --outfile=./dist/index.mjs --packages=external && bun build --target=node ./src/bin/duckdb-introspect.ts --outfile=./dist/duckdb-introspect.mjs --packages=external && bun run build:declarations",
     "build:declarations": "tsc --emitDeclarationOnly --project tsconfig.types.json",
     "test": "vitest",
-    "t": "vitest --watch --ui"
+    "t": "vitest --watch --ui",
+    "bench": "vitest bench --runInBand test/perf",
+    "perf:run": "bun run scripts/run-perf.ts",
+    "perf:compare": "bun run scripts/compare-perf.ts"
   },
   "bin": {
     "duckdb-introspect": "dist/duckdb-introspect.mjs"
@@ -33,7 +36,8 @@
     "prettier": "^3.5.3",
     "typescript": "^5.8.2",
     "uuid": "^10.0.0",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "tinybench": "^2.7.1"
   },
   "repository": {
     "type": "git",

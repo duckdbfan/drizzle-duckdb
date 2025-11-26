@@ -1,0 +1,95 @@
+// Typography - Distinctive but professional
+// Fonts loaded via _includes/head_custom.html
+
+// Override button primary color - light warm orange (MotherDuck-inspired)
+$btn-primary-color: #e8855a;
+
+:root {
+  // Light professional palette
+  --color-primary: #0969da;
+  --color-primary-dark: #0550ae;
+  --color-accent: #1a7f37;
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f6f8fa;
+  --color-text: #1f2328;
+  --color-text-secondary: #656d76;
+  --color-border: #d0d7de;
+  --color-code-bg: #f6f8fa;
+  --color-btn-orange: #e8855a;
+  --color-btn-orange-hover: #d67548;
+}
+
+// Body typography
+body {
+  font-family:
+    'IBM Plex Sans',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+// Code typography
+code,
+pre,
+.highlight {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+// Headings
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.site-title {
+  font-family:
+    'IBM Plex Sans',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  font-weight: 600;
+}
+
+// Link styling
+.site-nav a,
+.main-content a {
+  color: var(--color-primary);
+
+  &:hover {
+    color: var(--color-primary-dark);
+  }
+}
+
+// Improve code block styling
+.highlight {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+// Callout improvements
+.callout {
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+
+// Button styling for homepage
+.btn {
+  font-family:
+    'IBM Plex Sans',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background-color: var(--color-btn-orange) !important;
+  color: #fff !important;
+
+  &:hover {
+    background-color: var(--color-btn-orange-hover) !important;
+    color: #fff !important;
+  }
+}

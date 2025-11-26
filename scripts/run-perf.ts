@@ -1,0 +1,314 @@
+#!/usr/bin/env bun
+import { execFile } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { cpus } from 'node:os';
+import process from 'node:process';
+import { join } from 'node:path';
+import { asc, avg, eq, sql, sum } from 'drizzle-orm';
+import { Bench } from 'tinybench';
+import { closePerfHarness, createPerfHarness } from '../test/perf/setup.ts';
+import type { PerfHarness } from '../test/perf/setup.ts';
+import {
+  benchComplex,
+  benchInsert,
+  benchPrepared,
+  factLarge,
+  narrowWide,
+} from '../test/perf/schema.ts';
+import { olap, sumN } from '../src/olap.ts';
+
+type CliOptions = {
+  ghaOutput?: string;
+  repeat: number;
+};
+
+function parseArgs(argv: string[]): CliOptions {
+  const opts: CliOptions = { repeat: 1 };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (arg === '--gha-output') {
+      opts.ghaOutput = argv[++i];
+    } else if (arg === '--repeat') {
+      const next = argv[++i];
+      opts.repeat = next ? Number.parseInt(next, 10) : 1;
+    }
+  }
+  return opts;
+}
+
+async function main(): Promise<void> {
+  const opts = parseArgs(process.argv.slice(2));
+  let harness: PerfHarness | undefined;
+  try {
+    harness = await createPerfHarness();
+    const insertBatch = Array.from({ length: 100 }, (_, i) => ({
+      id: i,
+      val: `payload-${i}`,
+    }));
+
+    const preparedSelect = harness.db
+      .select({ id: benchPrepared.id, val: benchPrepared.val })
+      .from(benchPrepared)
+      .where(eq(benchPrepared.id, sql.placeholder('id')))
+      .prepare('perf_prepared_select');
+
+    const runIteration = async () => {
+      const bench = new Bench({ time: 700, warmupTime: 200 });
+      let mixedId = 1000;
+
+      bench.add('select-constant (builder)', async () => {
+        await harness!.db
+          .select({ one: factLarge.id })
+          .from(factLarge)
+          .limit(1);
+      });
+
+      bench.add('where + param (builder)', async () => {
+        await harness!.db
+          .select({ id: factLarge.id })
+          .from(factLarge)
+          .where(eq(factLarge.id, 42))
+          .limit(1);
+      });
+
+      bench.add('scan fact_large (builder)', async () => {
+        await harness!.db.select().from(factLarge);
+      });
+
+      bench.add('aggregation fact_large (builder)', async () => {
+        await harness!.db
+          .select({
+            mod100: factLarge.mod100,
+            avgValue: avg(factLarge.value),
+            sumValue: sum(factLarge.value),
+          })
+          .from(factLarge)
+          .groupBy(factLarge.mod100)
+          .orderBy(asc(factLarge.mod100));
+      });
+
+      bench.add('olap builder', async () => {
+        await olap(harness!.db)
+          .from(factLarge)
+          .groupBy([factLarge.cat])
+          .selectNonAggregates(
+            { anyPayload: factLarge.payload },
+            { anyValue: true }
+          )
+          .measures({
+            total: sumN(factLarge.value),
+            avgValue: avg(factLarge.value),
+          })
+          .orderBy(asc(factLarge.cat))
+          .run();
+      });
+
+      bench.add('wide row materialization', async () => {
+        await harness!.db.select().from(narrowWide);
+      });
+
+      bench.add('insert batch (builder)', async () => {
+        await harness!.db.delete(benchInsert);
+        await harness!.db.insert(benchInsert).values(insertBatch);
+      });
+
+      bench.add('insert batch returning', async () => {
+        await harness!.db.delete(benchInsert);
+        await harness!.db.insert(benchInsert).values(insertBatch).returning();
+      });
+
+      bench.add('upsert do update', async () => {
+        await harness!.db.delete(benchInsert);
+        await harness!.db.insert(benchInsert).values([{ id: 1, val: 'seed' }]);
+        await harness!.db
+          .insert(benchInsert)
+          .values([{ id: 1, val: 'updated' }])
+          .onConflictDoUpdate({
+            target: benchInsert.id,
+            set: { val: sql`excluded.val` },
+          });
+      });
+
+      bench.add('upsert do nothing', async () => {
+        await harness!.db.delete(benchInsert);
+        await harness!.db.insert(benchInsert).values([{ id: 1, val: 'seed' }]);
+        await harness!.db
+          .insert(benchInsert)
+          .values([{ id: 1, val: 'dup' }])
+          .onConflictDoNothing({ target: benchInsert.id });
+      });
+
+      bench.add('transaction insert+select', async () => {
+        await harness!.db.transaction(async (tx) => {
+          await tx.delete(benchInsert);
+          await tx.insert(benchInsert).values(insertBatch.slice(0, 20));
+          await tx.select().from(benchInsert).limit(5);
+        });
+      });
+
+      bench.add('prepared select reuse', async () => {
+        await preparedSelect.execute({ id: 10 });
+      });
+
+      bench.add('mixed workload (select + insert)', async () => {
+        await harness!.db
+          .select()
+          .from(factLarge)
+          .orderBy(asc(factLarge.id))
+          .limit(20);
+        await harness!.db
+          .insert(benchInsert)
+          .values([{ id: mixedId++, val: 'mix' }]);
+      });
+
+      bench.add('complex param mapping', async () => {
+        await harness!.db.delete(benchComplex);
+        await harness!.db.insert(benchComplex).values({
+          id: 1,
+          meta: { version: 2, tag: 'alpha' },
+          attrs: { region: 'us-east', env: 'dev' },
+          nums: [1, 2, 3, 4],
+          tags: ['a', 'b', 'c'],
+        });
+        await harness!.db
+          .select()
+          .from(benchComplex)
+          .where(eq(benchComplex.id, 1))
+          .limit(1);
+      });
+
+      bench.add('stream-batches', async () => {
+        let total = 0;
+        for await (const chunk of harness!.db.executeBatches(
+          sql`select * from ${factLarge}`,
+          { rowsPerChunk: 10000 }
+        )) {
+          total += chunk.length;
+        }
+        if (total !== 100000) {
+          throw new Error(`expected 100000 rows, saw ${total}`);
+        }
+      });
+
+      bench.add('arrow-fetch', async () => {
+        await harness!.db.executeArrow(sql`select * from ${factLarge}`);
+      });
+
+      await bench.warmup();
+      await bench.run();
+
+      return bench.tasks.map((task) => ({
+        name: task.name,
+        hz: task.result?.hz ?? 0,
+        mean: task.result?.mean ?? 0,
+        sd: task.result?.sd ?? 0,
+        samples: task.result?.samples?.length ?? 0,
+        rme: task.result?.rme ?? 0,
+      }));
+    };
+
+    const aggregate = new Map<
+      string,
+      { hz: number; mean: number; sd: number; samples: number; rme: number }
+    >();
+
+    for (let i = 0; i < opts.repeat; i++) {
+      const iterResults = await runIteration();
+      for (const r of iterResults) {
+        const prev = aggregate.get(r.name) ?? {
+          hz: 0,
+          mean: 0,
+          sd: 0,
+          samples: 0,
+          rme: 0,
+        };
+        aggregate.set(r.name, {
+          hz: prev.hz + r.hz,
+          mean: prev.mean + r.mean,
+          sd: prev.sd + r.sd,
+          samples: prev.samples + r.samples,
+          rme: prev.rme + r.rme,
+        });
+      }
+    }
+
+    const results = Array.from(aggregate.entries()).map(([name, sums]) => ({
+      name,
+      hz: sums.hz / opts.repeat,
+      mean: sums.mean / opts.repeat,
+      sd: sums.sd / opts.repeat,
+      samples: Math.round(sums.samples / opts.repeat),
+      rme: sums.rme / opts.repeat,
+    }));
+
+    const meta = {
+      gitSha: await gitSha(),
+      timestamp: new Date().toISOString(),
+      node: process.version,
+      bun: process.versions.bun,
+      platform: process.platform,
+      arch: process.arch,
+      cpu: cpus()[0]?.model ?? 'unknown',
+      repeat: opts.repeat,
+    };
+
+    const payload = { meta, results };
+
+    const outDir = 'perf-results';
+    await mkdir(outDir, { recursive: true });
+    const outFile = join(
+      outDir,
+      `${meta.timestamp.replace(/[:.]/g, '-')}-${meta.gitSha}.json`
+    );
+    await writeFile(outFile, JSON.stringify(payload, null, 2));
+    console.log(`perf results -> ${outFile}`);
+
+    if (opts.ghaOutput) {
+      const ghaShape = results.map((r) => ({
+        name: r.name,
+        unit: 'ops/s',
+        value: r.hz,
+        range: r.sd,
+      }));
+      await writeFile(opts.ghaOutput, JSON.stringify(ghaShape, null, 2));
+      console.log(`gha benchmark output -> ${opts.ghaOutput}`);
+    }
+  } finally {
+    if (harness) {
+      await closePerfHarness(harness);
+    }
+  }
+}
+
+async function gitSha(): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('git', [
+      'rev-parse',
+      '--short',
+      'HEAD',
+    ]);
+    return stdout.trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+function execFileAsync(
+  cmd: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
