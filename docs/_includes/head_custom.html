@@ -10,3 +10,28 @@
   href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
   rel="stylesheet"
 />
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const pagePath = '{{ page.path | escape }}';
+    if (!pagePath) return;
+
+    const heading = document.querySelector('.main-content h1');
+    if (!heading) return;
+
+    const container = document.createElement('div');
+    container.className = 'md-raw-link';
+
+    const link = document.createElement('a');
+    link.href =
+      'https://raw.githubusercontent.com/leonardovida/drizzle-neo-duckdb/main/docs/' +
+      pagePath;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'btn btn-outline';
+    link.textContent = 'Markdown (raw)';
+    link.title = 'Open the raw markdown for this page';
+
+    container.appendChild(link);
+    heading.insertAdjacentElement('afterend', container);
+  });
+</script>

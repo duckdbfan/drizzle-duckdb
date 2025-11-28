@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/@leonardovida-md/drizzle-neo-duckdb)](https://www.npmjs.com/package/@leonardovida-md/drizzle-neo-duckdb)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-[Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/) • [Examples](./example) • [Contributing](#contributing)
+[Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/) • [LLM Context](https://leonardovida.github.io/drizzle-neo-duckdb/llms.txt) • [Examples](./example) • [Contributing](#contributing)
 
 </div>
 
@@ -18,6 +18,8 @@
 Works with local DuckDB files, in-memory databases, and [MotherDuck](https://motherduck.com/) cloud.
 
 > **Status:** Experimental. Core query building, migrations, and type inference work well. Some DuckDB-specific types and edge cases are still being refined.
+
+Docs tip: every docs page has a **Markdown (raw)** button for LLM-friendly source.
 
 ## Installation
 
@@ -188,7 +190,7 @@ const products = pgTable('products', {
 });
 ```
 
-See [Column Types Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/api/columns) for complete reference.
+See [Column Types Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/api/columns) for complete reference.
 
 ## Querying
 
@@ -275,7 +277,7 @@ import { migrate } from '@leonardovida-md/drizzle-neo-duckdb';
 await migrate(db, { migrationsFolder: './drizzle' });
 ```
 
-Migration metadata is stored in `drizzle.__drizzle_migrations` by default. See [Migrations Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/guide/migrations) for configuration options.
+Migration metadata is stored in `drizzle.__drizzle_migrations` by default. See [Migrations Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/guide/migrations) for configuration options.
 
 ## Schema Introspection
 
@@ -300,7 +302,7 @@ const result = await introspect(db, {
 console.log(result.files.schemaTs);
 ```
 
-See [Introspection Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/guide/introspection) for all options.
+See [Introspection Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/guide/introspection) for all options.
 
 ## Configuration Options
 
@@ -333,7 +335,7 @@ This connector aims for compatibility with Drizzle's Postgres driver but has som
 | Prepared statements   | No statement caching                                       |
 | Streaming results     | Materialized by default; use `executeBatches()` for chunks |
 
-See [Limitations Documentation](https://leonardovida-md.github.io/drizzle-neo-duckdb/guide/limitations) for details.
+See [Limitations Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/guide/limitations) for details.
 
 ## Examples
 
