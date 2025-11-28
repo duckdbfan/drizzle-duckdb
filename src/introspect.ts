@@ -649,6 +649,28 @@ function mapDuckDbType(
     return { builder: `doublePrecision(${columnName(column.name)})` };
   }
 
+  const arrayMatch = /^(.*)\[(\d+)\]$/.exec(upper);
+  if (arrayMatch) {
+    imports.local.add('duckDbArray');
+    const [, base, length] = arrayMatch;
+    return {
+      builder: `duckDbArray(${columnName(
+        column.name
+      )}, ${JSON.stringify(base)}, ${Number(length)})`,
+    };
+  }
+
+  const listMatch = /^(.*)\[\]$/.exec(upper);
+  if (listMatch) {
+    imports.local.add('duckDbList');
+    const [, base] = listMatch;
+    return {
+      builder: `duckDbList(${columnName(
+        column.name
+      )}, ${JSON.stringify(base)})`,
+    };
+  }
+
   if (upper.startsWith('CHAR(') || upper === 'CHAR') {
     imports.pgCore.add('char');
     const length = column.characterLength;
@@ -697,28 +719,6 @@ function mapDuckDbType(
   if (upper === 'BLOB' || upper === 'BYTEA' || upper === 'VARBINARY') {
     imports.local.add('duckDbBlob');
     return { builder: `duckDbBlob(${columnName(column.name)})` };
-  }
-
-  const arrayMatch = /^(.*)\[(\d+)\]$/.exec(upper);
-  if (arrayMatch) {
-    imports.local.add('duckDbArray');
-    const [, base, length] = arrayMatch;
-    return {
-      builder: `duckDbArray(${columnName(
-        column.name
-      )}, ${JSON.stringify(base)}, ${Number(length)})`,
-    };
-  }
-
-  const listMatch = /^(.*)\[\]$/.exec(upper);
-  if (listMatch) {
-    imports.local.add('duckDbList');
-    const [, base] = listMatch;
-    return {
-      builder: `duckDbList(${columnName(
-        column.name
-      )}, ${JSON.stringify(base)})`,
-    };
   }
 
   if (upper.startsWith('STRUCT')) {
