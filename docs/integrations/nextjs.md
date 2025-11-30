@@ -56,30 +56,81 @@ MOTHERDUCK_TOKEN=your_token_here
 
 ## Creating a Database Client
 
-Create a singleton database client to reuse connections:
+### Recommended: Auto-Pooling Pattern
+
+The simplest approach uses connection strings with automatic pooling:
 
 ```typescript
 // lib/db.ts
-import { DuckDBInstance, DuckDBConnection } from '@duckdb/node-api';
 import { drizzle, DuckDBDatabase } from '@leonardovida-md/drizzle-neo-duckdb';
 import * as schema from './schema';
 
-let instance: DuckDBInstance | null = null;
-let connection: DuckDBConnection | null = null;
+let db: Awaited<ReturnType<typeof drizzle<typeof schema>>> | null = null;
 
-export async function getDb(): Promise<DuckDBDatabase<typeof schema>> {
-  if (!instance) {
+export async function getDb() {
+  if (!db) {
     const token = process.env.MOTHERDUCK_TOKEN;
-    instance = token
+    if (token) {
+      // MotherDuck with auto-pooling (4 connections by default)
+      db = await drizzle({
+        connection: {
+          path: 'md:',
+          options: { motherduck_token: token },
+        },
+        schema,
+      });
+    } else {
+      // In-memory with auto-pooling
+      db = await drizzle(':memory:', { schema });
+    }
+  }
+  return db;
+}
+```
+
+This automatically creates a connection pool, which is critical for MotherDuck to handle concurrent API requests without serialization.
+
+### Custom Pool Size
+
+For larger MotherDuck instances, increase the pool size:
+
+```typescript
+db = await drizzle({
+  connection: {
+    path: 'md:',
+    options: { motherduck_token: token },
+  },
+  pool: 'jumbo', // 8 connections (or use { size: 8 })
+  schema,
+});
+```
+
+Available presets: `'pulse'` (4), `'standard'` (6), `'jumbo'` (8), `'mega'` (12), `'giga'` (16).
+
+### Manual Pool Creation (Advanced)
+
+For more control, create the pool manually:
+
+```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
+import {
+  drizzle,
+  createDuckDBConnectionPool,
+} from '@leonardovida-md/drizzle-neo-duckdb';
+import * as schema from './schema';
+
+let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+
+export async function getDb() {
+  if (!db) {
+    const token = process.env.MOTHERDUCK_TOKEN;
+    const instance = token
       ? await DuckDBInstance.create('md:', { motherduck_token: token })
       : await DuckDBInstance.create(':memory:');
+    const pool = createDuckDBConnectionPool(instance, { size: 4 });
+    db = drizzle(pool, { schema });
   }
-
-  if (!connection) {
-    connection = await instance.connect();
-  }
-
-  return drizzle(connection, { schema });
+  return db;
 }
 ```
 
@@ -279,17 +330,22 @@ export const users = pgTable('users', {
 **`lib/db.ts`**:
 
 ```typescript
-import { DuckDBInstance } from '@duckdb/node-api';
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
 import * as schema from './schema';
 
-let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+let db: Awaited<ReturnType<typeof drizzle<typeof schema>>> | null = null;
 
 export async function getDb() {
   if (!db) {
-    const instance = await DuckDBInstance.create(':memory:');
-    const connection = await instance.connect();
-    db = drizzle(connection, { schema });
+    const token = process.env.MOTHERDUCK_TOKEN;
+    if (token) {
+      db = await drizzle({
+        connection: { path: 'md:', options: { motherduck_token: token } },
+        schema,
+      });
+    } else {
+      db = await drizzle(':memory:', { schema });
+    }
   }
   return db;
 }

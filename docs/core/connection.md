@@ -9,17 +9,38 @@ nav_order: 1
 
 Learn how to connect to DuckDB databases in different scenarios.
 
+## Quick Start (Recommended)
+
+The simplest way to connect uses a connection string with automatic pooling:
+
+```typescript
+import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
+
+// In-memory with auto-pooling (4 connections)
+const db = await drizzle(':memory:');
+
+// Local file with auto-pooling
+const db = await drizzle('./my-database.duckdb');
+
+// MotherDuck cloud with auto-pooling
+const db = await drizzle({
+  connection: {
+    path: 'md:',
+    options: { motherduck_token: process.env.MOTHERDUCK_TOKEN },
+  },
+});
+```
+
+This creates a connection pool automatically, which is critical for MotherDuck performance (see [Connection Pooling](#connection-pooling)).
+
 ## In-Memory Database
 
 Perfect for testing and temporary data processing:
 
 ```typescript
-import { DuckDBInstance } from '@duckdb/node-api';
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
 
-const instance = await DuckDBInstance.create(':memory:');
-const connection = await instance.connect();
-const db = drizzle(connection);
+const db = await drizzle(':memory:');
 ```
 
 Data is lost when the connection closes.
@@ -29,9 +50,7 @@ Data is lost when the connection closes.
 Persist your data to disk:
 
 ```typescript
-const instance = await DuckDBInstance.create('./my-database.duckdb');
-const connection = await instance.connect();
-const db = drizzle(connection);
+const db = await drizzle('./my-database.duckdb');
 ```
 
 The file is created if it doesn't exist.
@@ -41,11 +60,20 @@ The file is created if it doesn't exist.
 Connect to [MotherDuck](https://motherduck.com/) for cloud-hosted DuckDB:
 
 ```typescript
-const instance = await DuckDBInstance.create('md:', {
-  motherduck_token: process.env.MOTHERDUCK_TOKEN,
+const db = await drizzle({
+  connection: {
+    path: 'md:',
+    options: { motherduck_token: process.env.MOTHERDUCK_TOKEN },
+  },
 });
-const connection = await instance.connect();
-const db = drizzle(connection);
+
+// Or connect to a specific database
+const db = await drizzle({
+  connection: {
+    path: 'md:my_database',
+    options: { motherduck_token: process.env.MOTHERDUCK_TOKEN },
+  },
+});
 ```
 
 See the [MotherDuck guide](/integrations/motherduck) for more details.
@@ -131,25 +159,73 @@ const users = await withDb(async (db) => {
 });
 ```
 
-### Multiple Connections
+## Connection Pooling
 
-DuckDB supports multiple connections to the same database:
+DuckDB/MotherDuck runs **one query per connection**. Without pooling, concurrent requests serialize and cause slow response times. The `drizzle()` function automatically creates a connection pool when given a connection string.
+
+### Pool Size Configuration
+
+```typescript
+// Default: 4 connections
+const db = await drizzle(':memory:');
+
+// Custom pool size
+const db = await drizzle('md:', { pool: { size: 8 } });
+
+// Use a preset for MotherDuck instance types
+const db = await drizzle('md:', { pool: 'jumbo' }); // 8 connections
+const db = await drizzle('md:', { pool: 'giga' }); // 16 connections
+
+// Disable pooling (single connection)
+const db = await drizzle('md:', { pool: false });
+```
+
+### Pool Presets for MotherDuck
+
+| Preset       | Size | Use Case                       |
+| ------------ | ---- | ------------------------------ |
+| `'pulse'`    | 4    | Auto-scaling, ad-hoc analytics |
+| `'standard'` | 6    | Balanced ETL/ELT workloads     |
+| `'jumbo'`    | 8    | Complex queries, high-volume   |
+| `'mega'`     | 12   | Large-scale transformations    |
+| `'giga'`     | 16   | Maximum parallelism            |
+| `'local'`    | 8    | Local DuckDB file              |
+| `'memory'`   | 4    | In-memory testing              |
+
+### Manual Pool Creation (Advanced)
+
+For more control, create the pool manually:
+
+```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
+import {
+  drizzle,
+  createDuckDBConnectionPool,
+} from '@leonardovida-md/drizzle-neo-duckdb';
+
+const instance = await DuckDBInstance.create('./app.duckdb');
+const pool = createDuckDBConnectionPool(instance, { size: 4 });
+const db = drizzle(pool);
+```
+
+### Multiple Connections Without Pooling
+
+DuckDB supports multiple independent connections:
 
 ```typescript
 const instance = await DuckDBInstance.create('./app.duckdb');
 
-// Each connection can execute queries independently
 const conn1 = await instance.connect();
 const conn2 = await instance.connect();
 
-const db1 = drizzle(conn1);
-const db2 = drizzle(conn2);
+const db1 = drizzle({ client: conn1 });
+const db2 = drizzle({ client: conn2 });
 ```
 
 ## Configuration Options
 
 ```typescript
-const db = drizzle(connection, {
+const db = await drizzle(':memory:', {
   // Enable query logging
   logger: true,
 
@@ -158,6 +234,9 @@ const db = drizzle(connection, {
 
   // Schema for relational queries
   schema: mySchema,
+
+  // Pool configuration (preset, size, or false)
+  pool: { size: 8 },
 
   // Rewrite Postgres array operators to DuckDB (default: true)
   rewriteArrays: true,
@@ -171,12 +250,24 @@ See [Configuration](/reference/configuration) for all options.
 
 ## Closing Connections
 
-Always clean up connections when done:
+When using connection strings, call `close()` to clean up:
+
+```typescript
+const db = await drizzle('./app.duckdb');
+
+try {
+  // Use db...
+} finally {
+  await db.close();
+}
+```
+
+For manual connections, close them explicitly:
 
 ```typescript
 const instance = await DuckDBInstance.create('./app.duckdb');
 const connection = await instance.connect();
-const db = drizzle(connection);
+const db = drizzle({ client: connection });
 
 try {
   // Use db...

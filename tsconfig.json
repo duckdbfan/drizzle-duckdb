@@ -4,8 +4,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",
-    "isolatedModules": true, // need?
-    "composite": false, // need?
+    "isolatedModules": true,
+    "composite": false,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,

@@ -14,9 +14,9 @@ export async function migrate<TSchema extends Record<string, unknown>>(
 
   const migrations = readMigrationFiles(migrationConfig);
 
+  // Cast needed: Drizzle's internal PgSession type differs from exported type
   await db.dialect.migrate(
     migrations,
-    // Need to work around omitted internal types from drizzle...
     db.session as unknown as PgSession,
     migrationConfig
   );

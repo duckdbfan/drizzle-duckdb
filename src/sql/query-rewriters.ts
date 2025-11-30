@@ -1,13 +1,3 @@
-const selectionRegex = /select\s+(.+)\s+from/i;
-const tableIdPropSelectionRegex = new RegExp(
-  [
-    `("(.+)"\\."(.+)")`, // table identifier + property
-    `(\\s+as\\s+'?(.+?)'?\\.'?(.+?)'?)?`, // optional AS clause
-  ].join(''),
-  'i'
-);
-const noTableIdPropSelectionRegex = /"(.+)"(\s+as\s+'?\1'?)?/i;
-
 export function adaptArrayOperators(query: string): string {
   type ArrayOperator = {
     token: '@>' | '<@' | '&&';
@@ -34,6 +24,7 @@ export function adaptArrayOperators(query: string): string {
     let inString = false;
     for (; idx >= 0; idx--) {
       const ch = source[idx];
+      if (ch === undefined) break;
       if (ch === "'" && source[idx - 1] !== '\\') {
         inString = !inString;
       }
@@ -62,6 +53,7 @@ export function adaptArrayOperators(query: string): string {
     let inString = false;
     for (; idx < source.length; idx++) {
       const ch = source[idx];
+      if (ch === undefined) break;
       if (ch === "'" && source[idx - 1] !== '\\') {
         inString = !inString;
       }
@@ -102,43 +94,4 @@ export function adaptArrayOperators(query: string): string {
   }
 
   return rewritten;
-}
-
-export function queryAdapter(query: string): string {
-  const selection = selectionRegex.exec(query);
-
-  if (selection?.length !== 2) {
-    return query;
-  }
-
-  const fields = selection[1]
-    .split(',')
-    .map((field) => {
-      const trimmedField = field.trim();
-      const tableProp = tableIdPropSelectionRegex.exec(trimmedField);
-      if (tableProp) {
-        const [, identifier, table, column, , aliasTable, aliasColumn] =
-          tableProp;
-
-        const asAlias = `'${aliasTable ?? table}.${aliasColumn ?? column}'`;
-        if (tableProp[4]) {
-          return trimmedField.replace(tableProp[4], ` as ${asAlias}`);
-        }
-        return `${identifier} as ${asAlias}`;
-      }
-
-      const noTableProp = noTableIdPropSelectionRegex.exec(trimmedField);
-      if (noTableProp) {
-        const [, column, alias] = noTableProp;
-        const asAlias = ` as '${column}'`;
-        return alias
-          ? trimmedField.replace(alias, asAlias)
-          : `${trimmedField}${asAlias}`;
-      }
-
-      return trimmedField;
-    })
-    .filter(Boolean) as string[];
-
-  return query.replace(selection[1], fields.join(', '));
 }

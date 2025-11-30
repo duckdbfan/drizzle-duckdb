@@ -10,8 +10,20 @@ import {
   type AnyDuckDBValueWrapper,
 } from './value-wrappers.ts';
 
-export type DuckDBClientLike = DuckDBConnection;
+export type DuckDBClientLike = DuckDBConnection | DuckDBConnectionPool;
 export type RowData = Record<string, unknown>;
+
+export interface DuckDBConnectionPool {
+  acquire(): Promise<DuckDBConnection>;
+  release(connection: DuckDBConnection): void | Promise<void>;
+  close?(): Promise<void> | void;
+}
+
+export function isPool(
+  client: DuckDBClientLike
+): client is DuckDBConnectionPool {
+  return typeof (client as DuckDBConnectionPool).acquire === 'function';
+}
 
 export interface PrepareParamsOptions {
   rejectStringArrayLiterals?: boolean;
@@ -32,8 +44,6 @@ function parsePgArrayLiteral(value: string): unknown {
   }
 }
 
-let warnedArrayLiteral = false;
-
 export function prepareParams(
   params: unknown[],
   options: PrepareParamsOptions = {}
@@ -46,8 +56,7 @@ export function prepareParams(
         );
       }
 
-      if (!warnedArrayLiteral && options.warnOnStringArrayLiteral) {
-        warnedArrayLiteral = true;
+      if (options.warnOnStringArrayLiteral) {
         options.warnOnStringArrayLiteral();
       }
       return parsePgArrayLiteral(param);
@@ -138,6 +147,15 @@ export async function executeOnClient(
   query: string,
   params: unknown[]
 ): Promise<RowData[]> {
+  if (isPool(client)) {
+    const connection = await client.acquire();
+    try {
+      return await executeOnClient(connection, query, params);
+    } finally {
+      await client.release(connection);
+    }
+  }
+
   const values =
     params.length > 0
       ? (params.map((param) => toNodeApiValue(param)) as DuckDBValue[])
@@ -165,6 +183,16 @@ export async function* executeInBatches(
   params: unknown[],
   options: ExecuteInBatchesOptions = {}
 ): AsyncGenerator<RowData[], void, void> {
+  if (isPool(client)) {
+    const connection = await client.acquire();
+    try {
+      yield* executeInBatches(connection, query, params, options);
+      return;
+    } finally {
+      await client.release(connection);
+    }
+  }
+
   const rowsPerChunk =
     options.rowsPerChunk && options.rowsPerChunk > 0
       ? options.rowsPerChunk
@@ -207,12 +235,22 @@ export async function executeArrowOnClient(
   query: string,
   params: unknown[]
 ): Promise<unknown> {
+  if (isPool(client)) {
+    const connection = await client.acquire();
+    try {
+      return await executeArrowOnClient(connection, query, params);
+    } finally {
+      await client.release(connection);
+    }
+  }
+
   const values =
     params.length > 0
       ? (params.map((param) => toNodeApiValue(param)) as DuckDBValue[])
       : undefined;
   const result = await client.run(query, values);
 
+  // Runtime detection for Arrow API support (optional method, not in base type)
   const maybeArrow =
     (result as unknown as { toArrow?: () => Promise<unknown> }).toArrow ??
     (result as unknown as { getArrowTable?: () => Promise<unknown> })

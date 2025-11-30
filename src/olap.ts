@@ -169,6 +169,7 @@ export class OlapBuilder {
 
     Object.assign(selection, this.measureMap);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle's query builder types don't allow reassignment after groupBy
     let query: any = this.db
       .select(selection as SelectedFields)
       .from(this.source!)

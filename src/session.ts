@@ -297,6 +297,7 @@ export class DuckDBTransaction<
   }
 
   setTransaction(config: PgTransactionConfig): Promise<void> {
+    // Cast needed: PgTransaction doesn't expose dialect/session properties in public API
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
     return (this as unknown as Tx).session.execute(
       sql`set transaction ${this.getTransactionConfigSQL(config)}`
@@ -307,11 +308,13 @@ export class DuckDBTransaction<
     query: SQL,
     options: ExecuteInBatchesOptions = {}
   ): AsyncGenerator<GenericRowData<T>[], void, void> {
+    // Cast needed: PgTransaction doesn't expose session property in public API
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
     return (this as unknown as Tx).session.executeBatches<T>(query, options);
   }
 
   executeArrow(query: SQL): Promise<unknown> {
+    // Cast needed: PgTransaction doesn't expose session property in public API
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
     return (this as unknown as Tx).session.executeArrow(query);
   }
@@ -319,6 +322,7 @@ export class DuckDBTransaction<
   override async transaction<T>(
     transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
   ): Promise<T> {
+    // Cast needed: PgTransaction doesn't expose dialect/session properties in public API
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
     const nestedTx = new DuckDBTransaction<TFullSchema, TSchema>(
       (this as unknown as Tx).dialect,
