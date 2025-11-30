@@ -12,7 +12,7 @@ import {
   type MapValueWrapper,
   type BlobValueWrapper,
   type JsonValueWrapper,
-} from './value-wrappers.ts';
+} from './value-wrappers-core.ts';
 
 type IntColType =
   | 'SMALLINT'

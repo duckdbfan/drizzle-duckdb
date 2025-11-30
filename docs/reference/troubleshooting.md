@@ -129,6 +129,12 @@ const nextConfig = {
 };
 ```
 
+When sharing generated schemas with client components (e.g., drizzle-zod or tRPC inputs), import column helpers from the browser-safe subpath to avoid bundling the native binding:
+
+```ts
+import { duckDbJson } from '@leonardovida-md/drizzle-neo-duckdb/helpers';
+```
+
 ### "Native Node.js APIs not supported" Error
 
 **Symptom**:

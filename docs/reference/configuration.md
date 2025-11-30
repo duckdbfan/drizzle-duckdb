@@ -205,7 +205,7 @@ const result = await introspect(db, {
   includeViews: true,
   useCustomTimeTypes: true,
   mapJsonAsDuckDbJson: true,
-  importBasePath: '@leonardovida-md/drizzle-neo-duckdb',
+  importBasePath: '@leonardovida-md/drizzle-neo-duckdb/helpers',
 });
 ```
 
@@ -273,9 +273,9 @@ Map JSON columns to `duckDbJson`.
 
 Base path for local type imports.
 
-| Type     | Default                                 | Description           |
-| -------- | --------------------------------------- | --------------------- |
-| `string` | `'@leonardovida-md/drizzle-neo-duckdb'` | Import path for types |
+| Type     | Default                                         | Description           |
+| -------- | ----------------------------------------------- | --------------------- |
+| `string` | `'@leonardovida-md/drizzle-neo-duckdb/helpers'` | Import path for types |
 
 ## Environment Variables
 

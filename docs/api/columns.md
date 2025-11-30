@@ -81,7 +81,7 @@ const table = pgTable('example', {
 
 ## DuckDB-Specific Types
 
-Import these from `@leonardovida-md/drizzle-neo-duckdb`:
+Import these from `@leonardovida-md/drizzle-neo-duckdb`. When the generated schema will be used in a browser bundle (drizzle-zod, tRPC inputs, React props), import from the client-safe helpers subpath instead to avoid bundling the native DuckDB node bindings:
 
 ```typescript
 import {
@@ -96,7 +96,7 @@ import {
   duckDbBlob,
   duckDbInet,
   duckDbInterval,
-} from '@leonardovida-md/drizzle-neo-duckdb';
+} from '@leonardovida-md/drizzle-neo-duckdb/helpers';
 ```
 
 ### Lists and Arrays

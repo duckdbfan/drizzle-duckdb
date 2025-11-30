@@ -40,7 +40,7 @@ interface IntrospectOptions {
   // Map JSON columns to duckDbJson (default: true)
   mapJsonAsDuckDbJson?: boolean;
 
-  // Base import path for local types (default: '@leonardovida-md/drizzle-neo-duckdb')
+  // Base import path for local types (default: '@leonardovida-md/drizzle-neo-duckdb/helpers')
   importBasePath?: string;
 }
 ```
@@ -148,7 +148,7 @@ import {
   duckDbList,
   duckDbJson,
   duckDbTimestamp,
-} from '@leonardovida-md/drizzle-neo-duckdb';
+} from '@leonardovida-md/drizzle-neo-duckdb/helpers';
 
 export const mainSchema = pgSchema('main');
 

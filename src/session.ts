@@ -19,7 +19,11 @@ import { adaptArrayOperators } from './sql/query-rewriters.ts';
 import { mapResultRow } from './sql/result-mapper.ts';
 import type { DuckDBDialect } from './dialect.ts';
 import { TransactionRollbackError } from 'drizzle-orm/errors';
-import type { DuckDBClientLike, RowData } from './client.ts';
+import type {
+  DuckDBClientLike,
+  DuckDBConnectionPool,
+  RowData,
+} from './client.ts';
 import {
   executeArrowOnClient,
   executeInBatches,
@@ -27,6 +31,8 @@ import {
   prepareParams,
   type ExecuteInBatchesOptions,
 } from './client.ts';
+import { isPool } from './client.ts';
+import type { DuckDBConnection } from '@duckdb/node-api';
 
 export type { DuckDBClientLike, RowData } from './client.ts';
 
@@ -165,8 +171,18 @@ export class DuckDBSession<
   override async transaction<T>(
     transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
   ): Promise<T> {
+    let pinnedConnection: DuckDBConnection | undefined;
+    let pool: DuckDBConnectionPool | undefined;
+
+    let clientForTx: DuckDBClientLike = this.client;
+    if (isPool(this.client)) {
+      pool = this.client;
+      pinnedConnection = await pool.acquire();
+      clientForTx = pinnedConnection;
+    }
+
     const session = new DuckDBSession(
-      this.client,
+      clientForTx,
       this.dialect,
       this.schema,
       this.options
@@ -178,15 +194,21 @@ export class DuckDBSession<
       this.schema
     );
 
-    await tx.execute(sql`BEGIN TRANSACTION;`);
-
     try {
-      const result = await transaction(tx);
-      await tx.execute(sql`commit`);
-      return result;
-    } catch (error) {
-      await tx.execute(sql`rollback`);
-      throw error;
+      await tx.execute(sql`BEGIN TRANSACTION;`);
+
+      try {
+        const result = await transaction(tx);
+        await tx.execute(sql`commit`);
+        return result;
+      } catch (error) {
+        await tx.execute(sql`rollback`);
+        throw error;
+      }
+    } finally {
+      if (pinnedConnection && pool) {
+        await pool.release(pinnedConnection);
+      }
     }
   }
 

@@ -319,4 +319,36 @@ describe('Local DuckDB Pooling', () => {
     await pool.close();
     instance.closeSync();
   });
+
+  test('pooled transactions pin a single connection', async () => {
+    const db = await drizzle(':memory:', { pool: { size: 2 } });
+
+    await db.execute(
+      sql`CREATE TABLE tx_pin (id INTEGER PRIMARY KEY, name TEXT)`
+    );
+
+    // Rollback path should leave table empty
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.execute(sql`INSERT INTO tx_pin VALUES (1, 'a')`);
+        throw new Error('boom');
+      })
+    ).rejects.toThrow('boom');
+
+    const afterRollback = await db.execute(
+      sql`SELECT COUNT(*) as c FROM tx_pin`
+    );
+    expect(afterRollback[0].c).toBe(0n);
+
+    // Commit path should persist both rows
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`INSERT INTO tx_pin VALUES (1, 'a')`);
+      await tx.execute(sql`INSERT INTO tx_pin VALUES (2, 'b')`);
+    });
+
+    const afterCommit = await db.execute(sql`SELECT COUNT(*) as c FROM tx_pin`);
+    expect(afterCommit[0].c).toBe(2n);
+
+    await db.close();
+  });
 });

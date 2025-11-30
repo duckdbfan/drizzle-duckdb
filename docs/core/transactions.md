@@ -28,6 +28,10 @@ await db.transaction(async (tx) => {
 
 If any operation fails, all changes are rolled back.
 
+## Pooling & Transactions
+
+When you create a database with connection pooling (`drizzle(':memory:', { pool: { size: 4 } })` or the async connection-string form), transactions automatically **pin a single pooled connection** for their entire lifetime. `BEGIN`, all queries in the callback, and `COMMIT`/`ROLLBACK` run on that one connection to keep the transaction atomic. No extra configuration is required; pooling is still used for non-transactional queries.
+
 ## With Return Value
 
 ```typescript

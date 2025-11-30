@@ -129,7 +129,7 @@ interface IntrospectOptions {
   // Use duckDbJson for JSON columns (default: true)
   mapJsonAsDuckDbJson?: boolean;
 
-  // Custom import path for helpers (default: package name)
+  // Custom import path for helpers (default: '@leonardovida-md/drizzle-neo-duckdb/helpers')
   importBasePath?: string;
 }
 ```
@@ -188,7 +188,7 @@ import {
   duckDbList,
   duckDbStruct,
   duckDbTimestamp,
-} from '@leonardovida-md/drizzle-neo-duckdb';
+} from '@leonardovida-md/drizzle-neo-duckdb/helpers';
 
 export const analyticsSchema = pgSchema('analytics');
 

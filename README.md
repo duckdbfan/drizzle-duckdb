@@ -192,6 +192,19 @@ const products = pgTable('products', {
 
 See [Column Types Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/api/columns) for complete reference.
 
+### Client-Safe Imports (schemas, drizzle-zod, trpc)
+
+When generated schemas are consumed in client bundles, import the helpers from the browser-safe subpath to avoid pulling the native DuckDB bindings:
+
+```typescript
+import {
+  duckDbJson,
+  duckDbList,
+} from '@leonardovida-md/drizzle-neo-duckdb/helpers';
+```
+
+The introspection CLI now emits this import path by default. You can still override `importBasePath` if you need the old root import.
+
 ## Querying
 
 All standard Drizzle query methods work:

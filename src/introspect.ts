@@ -108,7 +108,8 @@ type ImportBuckets = {
   local: Set<string>;
 };
 
-const DEFAULT_IMPORT_BASE = '@leonardovida-md/drizzle-neo-duckdb';
+export const DEFAULT_IMPORT_BASE =
+  '@leonardovida-md/drizzle-neo-duckdb/helpers';
 
 export async function introspect(
   db: DuckDBDatabase,
