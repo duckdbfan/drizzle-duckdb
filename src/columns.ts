@@ -7,11 +7,13 @@ import {
   wrapMap,
   wrapBlob,
   wrapJson,
+  wrapTimestamp,
   type ListValueWrapper,
   type ArrayValueWrapper,
   type MapValueWrapper,
   type BlobValueWrapper,
   type JsonValueWrapper,
+  type TimestampValueWrapper,
 } from './value-wrappers-core.ts';
 
 type IntColType =
@@ -355,12 +357,35 @@ interface TimestampOptions {
   withTimezone?: boolean;
   mode?: TimestampMode;
   precision?: number;
+  bindMode?: 'auto' | 'bind' | 'literal';
+}
+
+function shouldBindTimestamp(options: TimestampOptions): boolean {
+  const bindMode = options.bindMode ?? 'auto';
+  if (bindMode === 'bind') return true;
+  if (bindMode === 'literal') return false;
+
+  const isBun =
+    typeof process !== 'undefined' &&
+    typeof process.versions?.bun !== 'undefined';
+  if (isBun) return false;
+
+  const forceLiteral =
+    typeof process !== 'undefined'
+      ? process.env.DRIZZLE_DUCKDB_FORCE_LITERAL_TIMESTAMPS
+      : undefined;
+
+  if (forceLiteral && forceLiteral !== '0') {
+    return false;
+  }
+
+  return true;
 }
 
 export const duckDbTimestamp = (name: string, options: TimestampOptions = {}) =>
   customType<{
     data: Date | string;
-    driverData: SQL | string | Date;
+    driverData: SQL | string | Date | TimestampValueWrapper;
   }>({
     dataType() {
       if (options.withTimezone) {
@@ -369,14 +394,36 @@ export const duckDbTimestamp = (name: string, options: TimestampOptions = {}) =>
       const precision = options.precision ? `(${options.precision})` : '';
       return `TIMESTAMP${precision}`;
     },
-    toDriver(value: Date | string) {
-      // Use SQL literals for timestamps due to Bun/DuckDB bigint binding issues
+    toDriver(
+      value: Date | string
+    ): SQL | string | Date | TimestampValueWrapper {
+      if (shouldBindTimestamp(options)) {
+        return wrapTimestamp(
+          value,
+          options.withTimezone ?? false,
+          options.precision
+        );
+      }
+
       const iso = value instanceof Date ? value.toISOString() : value;
       const normalized = iso.replace('T', ' ').replace('Z', '+00');
       const typeKeyword = options.withTimezone ? 'TIMESTAMPTZ' : 'TIMESTAMP';
       return sql.raw(`${typeKeyword} '${normalized}'`);
     },
-    fromDriver(value: Date | string | SQL) {
+    fromDriver(value: Date | string | SQL | TimestampValueWrapper) {
+      if (
+        value &&
+        typeof value === 'object' &&
+        'kind' in value &&
+        (value as TimestampValueWrapper).kind === 'timestamp'
+      ) {
+        const wrapped = value as TimestampValueWrapper;
+        return wrapped.data instanceof Date
+          ? wrapped.data
+          : typeof wrapped.data === 'number' || typeof wrapped.data === 'bigint'
+            ? new Date(Number(wrapped.data) / 1000)
+            : wrapped.data;
+      }
       if (options.mode === 'string') {
         if (value instanceof Date) {
           return value.toISOString().replace('T', ' ').replace('Z', '+00');

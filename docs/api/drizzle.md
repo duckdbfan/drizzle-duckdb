@@ -45,8 +45,11 @@ interface DuckDBDrizzleConfig<TSchema> {
   // Schema for relational queries
   schema?: TSchema;
 
-  // Rewrite Postgres array operators to DuckDB functions (default: true)
-  rewriteArrays?: boolean;
+  // Rewrite Postgres array operators to DuckDB functions (default: 'auto')
+  rewriteArrays?: 'auto' | 'always' | 'never' | boolean;
+
+  // Enable a per-connection prepared statement cache (default: disabled)
+  prepareCache?: boolean | number | { size?: number };
 
   // Throw on Postgres-style array literals like '{1,2,3}' (default: false)
   rejectStringArrayLiterals?: boolean;

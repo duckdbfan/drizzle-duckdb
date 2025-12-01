@@ -7,3 +7,4 @@ export * from './client.ts';
 export * from './pool.ts';
 export * from './olap.ts';
 export * from './value-wrappers.ts';
+export * from './options.ts';

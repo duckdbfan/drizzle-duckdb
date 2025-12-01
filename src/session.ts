@@ -26,13 +26,20 @@ import type {
 } from './client.ts';
 import {
   executeArrowOnClient,
+  executeArraysOnClient,
   executeInBatches,
+  executeInBatchesRaw,
   executeOnClient,
   prepareParams,
+  type ExecuteBatchesRawChunk,
   type ExecuteInBatchesOptions,
 } from './client.ts';
 import { isPool } from './client.ts';
 import type { DuckDBConnection } from '@duckdb/node-api';
+import type {
+  PreparedStatementCacheConfig,
+  RewriteArraysMode,
+} from './options.ts';
 
 export type { DuckDBClientLike, RowData } from './client.ts';
 
@@ -44,6 +51,18 @@ function isSavepointSyntaxError(error: unknown): boolean {
     error.message.toLowerCase().includes('savepoint') &&
     error.message.toLowerCase().includes('syntax error')
   );
+}
+
+function rewriteQuery(
+  mode: RewriteArraysMode,
+  query: string
+): { sql: string; rewritten: boolean } {
+  if (mode === 'never') {
+    return { sql: query, rewritten: false };
+  }
+
+  const rewritten = adaptArrayOperators(query);
+  return { sql: rewritten, rewritten: rewritten !== query };
 }
 
 export class DuckDBPreparedQuery<
@@ -62,8 +81,9 @@ export class DuckDBPreparedQuery<
     private customResultMapper:
       | ((rows: unknown[][]) => T['execute'])
       | undefined,
-    private rewriteArrays: boolean,
+    private rewriteArraysMode: RewriteArraysMode,
     private rejectStringArrayLiterals: boolean,
+    private prepareCache: PreparedStatementCacheConfig | undefined,
     private warnOnStringArrayLiteral?: (sql: string) => void
   ) {
     super({ sql: queryString, params });
@@ -82,11 +102,12 @@ export class DuckDBPreparedQuery<
           : undefined,
       }
     );
-    const rewrittenQuery = this.rewriteArrays
-      ? adaptArrayOperators(this.queryString)
-      : this.queryString;
+    const { sql: rewrittenQuery, rewritten: didRewrite } = rewriteQuery(
+      this.rewriteArraysMode,
+      this.queryString
+    );
 
-    if (this.rewriteArrays && rewrittenQuery !== this.queryString) {
+    if (didRewrite) {
       this.logger.logQuery(
         `[duckdb] original query before array rewrite: ${this.queryString}`,
         params
@@ -98,19 +119,30 @@ export class DuckDBPreparedQuery<
     const { fields, joinsNotNullableMap, customResultMapper } =
       this as typeof this & { joinsNotNullableMap?: Record<string, boolean> };
 
-    const rows = await executeOnClient(this.client, rewrittenQuery, params);
+    if (fields) {
+      const { rows } = await executeArraysOnClient(
+        this.client,
+        rewrittenQuery,
+        params,
+        { prepareCache: this.prepareCache }
+      );
 
-    if (rows.length === 0 || !fields) {
-      return rows as T['execute'];
+      if (rows.length === 0) {
+        return [] as T['execute'];
+      }
+
+      return customResultMapper
+        ? customResultMapper(rows)
+        : rows.map((row) =>
+            mapResultRow<T['execute']>(fields, row, joinsNotNullableMap)
+          );
     }
 
-    const rowValues = rows.map((row) => Object.values(row));
+    const rows = await executeOnClient(this.client, rewrittenQuery, params, {
+      prepareCache: this.prepareCache,
+    });
 
-    return customResultMapper
-      ? customResultMapper(rowValues)
-      : rowValues.map((row) =>
-          mapResultRow<T['execute']>(fields, row, joinsNotNullableMap)
-        );
+    return rows as T['execute'];
   }
 
   all(
@@ -126,8 +158,9 @@ export class DuckDBPreparedQuery<
 
 export interface DuckDBSessionOptions {
   logger?: Logger;
-  rewriteArrays?: boolean;
+  rewriteArrays?: RewriteArraysMode;
   rejectStringArrayLiterals?: boolean;
+  prepareCache?: PreparedStatementCacheConfig;
 }
 
 export class DuckDBSession<
@@ -138,8 +171,9 @@ export class DuckDBSession<
 
   protected override dialect: DuckDBDialect;
   private logger: Logger;
-  private rewriteArrays: boolean;
+  private rewriteArraysMode: RewriteArraysMode;
   private rejectStringArrayLiterals: boolean;
+  private prepareCache: PreparedStatementCacheConfig | undefined;
   private hasWarnedArrayLiteral = false;
   private rollbackOnly = false;
 
@@ -152,8 +186,14 @@ export class DuckDBSession<
     super(dialect);
     this.dialect = dialect;
     this.logger = options.logger ?? new NoopLogger();
-    this.rewriteArrays = options.rewriteArrays ?? true;
+    this.rewriteArraysMode = options.rewriteArrays ?? 'auto';
     this.rejectStringArrayLiterals = options.rejectStringArrayLiterals ?? false;
+    this.prepareCache = options.prepareCache;
+    this.options = {
+      ...options,
+      rewriteArrays: this.rewriteArraysMode,
+      prepareCache: this.prepareCache,
+    };
   }
 
   prepareQuery<T extends PreparedQueryConfig = PreparedQueryConfig>(
@@ -173,8 +213,9 @@ export class DuckDBSession<
       fields,
       isResponseInArrayMode,
       customResultMapper,
-      this.rewriteArrays,
+      this.rewriteArraysMode,
       this.rejectStringArrayLiterals,
+      this.prepareCache,
       this.rejectStringArrayLiterals ? undefined : this.warnOnStringArrayLiteral
     );
   }
@@ -266,11 +307,12 @@ export class DuckDBSession<
         ? undefined
         : () => this.warnOnStringArrayLiteral(builtQuery.sql),
     });
-    const rewrittenQuery = this.rewriteArrays
-      ? adaptArrayOperators(builtQuery.sql)
-      : builtQuery.sql;
+    const { sql: rewrittenQuery, rewritten: didRewrite } = rewriteQuery(
+      this.rewriteArraysMode,
+      builtQuery.sql
+    );
 
-    if (this.rewriteArrays && rewrittenQuery !== builtQuery.sql) {
+    if (didRewrite) {
       this.logger.logQuery(
         `[duckdb] original query before array rewrite: ${builtQuery.sql}`,
         params
@@ -287,6 +329,36 @@ export class DuckDBSession<
     ) as AsyncGenerator<GenericRowData<T>[], void, void>;
   }
 
+  executeBatchesRaw(
+    query: SQL,
+    options: ExecuteInBatchesOptions = {}
+  ): AsyncGenerator<ExecuteBatchesRawChunk, void, void> {
+    this.dialect.resetPgJsonFlag();
+    const builtQuery = this.dialect.sqlToQuery(query);
+    this.dialect.assertNoPgJsonColumns();
+    const params = prepareParams(builtQuery.params, {
+      rejectStringArrayLiterals: this.rejectStringArrayLiterals,
+      warnOnStringArrayLiteral: this.rejectStringArrayLiterals
+        ? undefined
+        : () => this.warnOnStringArrayLiteral(builtQuery.sql),
+    });
+    const { sql: rewrittenQuery, rewritten: didRewrite } = rewriteQuery(
+      this.rewriteArraysMode,
+      builtQuery.sql
+    );
+
+    if (didRewrite) {
+      this.logger.logQuery(
+        `[duckdb] original query before array rewrite: ${builtQuery.sql}`,
+        params
+      );
+    }
+
+    this.logger.logQuery(rewrittenQuery, params);
+
+    return executeInBatchesRaw(this.client, rewrittenQuery, params, options);
+  }
+
   async executeArrow(query: SQL): Promise<unknown> {
     this.dialect.resetPgJsonFlag();
     const builtQuery = this.dialect.sqlToQuery(query);
@@ -297,11 +369,12 @@ export class DuckDBSession<
         ? undefined
         : () => this.warnOnStringArrayLiteral(builtQuery.sql),
     });
-    const rewrittenQuery = this.rewriteArrays
-      ? adaptArrayOperators(builtQuery.sql)
-      : builtQuery.sql;
+    const { sql: rewrittenQuery, rewritten: didRewrite } = rewriteQuery(
+      this.rewriteArraysMode,
+      builtQuery.sql
+    );
 
-    if (this.rewriteArrays && rewrittenQuery !== builtQuery.sql) {
+    if (didRewrite) {
       this.logger.logQuery(
         `[duckdb] original query before array rewrite: ${builtQuery.sql}`,
         params
@@ -375,6 +448,15 @@ export class DuckDBTransaction<
     // Cast needed: PgTransaction doesn't expose session property in public API
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
     return (this as unknown as Tx).session.executeBatches<T>(query, options);
+  }
+
+  executeBatchesRaw(
+    query: SQL,
+    options: ExecuteInBatchesOptions = {}
+  ): AsyncGenerator<ExecuteBatchesRawChunk, void, void> {
+    // Cast needed: PgTransaction doesn't expose session property in public API
+    type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
+    return (this as unknown as Tx).session.executeBatchesRaw(query, options);
   }
 
   executeArrow(query: SQL): Promise<unknown> {

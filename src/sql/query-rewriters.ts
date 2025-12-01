@@ -171,6 +171,14 @@ function walkRight(
 }
 
 export function adaptArrayOperators(query: string): string {
+  if (
+    query.indexOf('@>') === -1 &&
+    query.indexOf('<@') === -1 &&
+    query.indexOf('&&') === -1
+  ) {
+    return query;
+  }
+
   let rewritten = query;
   let scrubbed = scrubForRewrite(query);
   let searchStart = 0;

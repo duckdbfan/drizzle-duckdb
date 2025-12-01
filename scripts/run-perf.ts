@@ -16,16 +16,25 @@ import {
   narrowWide,
 } from '../test/perf/schema.ts';
 import { olap, sumN } from '../src/olap.ts';
+import type { RewriteArraysMode } from '../src/options.ts';
 
 type CliOptions = {
   ghaOutput?: string;
   repeat: number;
   pooled: boolean;
   poolSize: number;
+  rewriteArrays: RewriteArraysMode;
+  rawStream: boolean;
 };
 
 function parseArgs(argv: string[]): CliOptions {
-  const opts: CliOptions = { repeat: 1, pooled: false, poolSize: 4 };
+  const opts: CliOptions = {
+    repeat: 1,
+    pooled: false,
+    poolSize: 4,
+    rewriteArrays: 'auto',
+    rawStream: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--gha-output') {
@@ -38,24 +47,48 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--pool-size') {
       const next = argv[++i];
       opts.poolSize = next ? Number.parseInt(next, 10) : 4;
+    } else if (arg === '--rewrite-arrays') {
+      const next = argv[++i];
+      if (next === 'auto' || next === 'always' || next === 'never') {
+        opts.rewriteArrays = next;
+      }
+    } else if (arg === '--raw-stream') {
+      opts.rawStream = true;
     }
   }
   return opts;
 }
 
+function percentile(samples: number[], p: number): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const idx = (p / 100) * (sorted.length - 1);
+  const lower = Math.floor(idx);
+  const upper = Math.ceil(idx);
+  if (lower === upper) {
+    return sorted[lower] as number;
+  }
+  const weight = idx - lower;
+  return sorted[lower]! * (1 - weight) + sorted[upper]! * weight;
+}
+
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
   let harness: AnyPerfHarness | undefined;
+  let memStart: NodeJS.MemoryUsage | undefined;
+  let memEnd: NodeJS.MemoryUsage | undefined;
   try {
     harness = await createPerfHarness({
       pooled: opts.pooled,
       poolSize: opts.poolSize,
+      rewriteArrays: opts.rewriteArrays,
     });
     const modeLabel =
       harness.mode === 'pooled'
         ? `pooled (size=${(harness as { poolSize: number }).poolSize})`
         : 'single';
     console.log(`Running benchmarks in ${modeLabel} mode...`);
+    memStart = process.memoryUsage();
     const insertBatch = Array.from({ length: 100 }, (_, i) => ({
       id: i,
       val: `payload-${i}`,
@@ -205,6 +238,21 @@ async function main(): Promise<void> {
         }
       });
 
+      if (opts.rawStream) {
+        bench.add('stream-batches-raw', async () => {
+          let total = 0;
+          for await (const chunk of harness!.db.executeBatchesRaw(
+            sql`select * from ${factLarge}`,
+            { rowsPerChunk: 10000 }
+          )) {
+            total += chunk.rows.length;
+          }
+          if (total !== 100000) {
+            throw new Error(`expected 100000 rows, saw ${total}`);
+          }
+        });
+      }
+
       bench.add('arrow-fetch', async () => {
         await harness!.db.executeArrow(sql`select * from ${factLarge}`);
       });
@@ -303,19 +351,32 @@ async function main(): Promise<void> {
       await bench.warmup();
       await bench.run();
 
-      return bench.tasks.map((task) => ({
-        name: task.name,
-        hz: task.result?.hz ?? 0,
-        mean: task.result?.mean ?? 0,
-        sd: task.result?.sd ?? 0,
-        samples: task.result?.samples?.length ?? 0,
-        rme: task.result?.rme ?? 0,
-      }));
+      return bench.tasks.map((task) => {
+        const samples = task.result?.samples ?? [];
+        return {
+          name: task.name,
+          hz: task.result?.hz ?? 0,
+          mean: task.result?.mean ?? 0,
+          sd: task.result?.sd ?? 0,
+          samples: samples.length,
+          rme: task.result?.rme ?? 0,
+          p50: percentile(samples, 50),
+          p95: percentile(samples, 95),
+        };
+      });
     };
 
     const aggregate = new Map<
       string,
-      { hz: number; mean: number; sd: number; samples: number; rme: number }
+      {
+        hz: number;
+        mean: number;
+        sd: number;
+        samples: number;
+        rme: number;
+        p50: number;
+        p95: number;
+      }
     >();
 
     for (let i = 0; i < opts.repeat; i++) {
@@ -327,6 +388,8 @@ async function main(): Promise<void> {
           sd: 0,
           samples: 0,
           rme: 0,
+          p50: 0,
+          p95: 0,
         };
         aggregate.set(r.name, {
           hz: prev.hz + r.hz,
@@ -334,6 +397,8 @@ async function main(): Promise<void> {
           sd: prev.sd + r.sd,
           samples: prev.samples + r.samples,
           rme: prev.rme + r.rme,
+          p50: prev.p50 + r.p50,
+          p95: prev.p95 + r.p95,
         });
       }
     }
@@ -345,7 +410,11 @@ async function main(): Promise<void> {
       sd: sums.sd / opts.repeat,
       samples: Math.round(sums.samples / opts.repeat),
       rme: sums.rme / opts.repeat,
+      p50: sums.p50 / opts.repeat,
+      p95: sums.p95 / opts.repeat,
     }));
+
+    memEnd = process.memoryUsage();
 
     const meta = {
       gitSha: await gitSha(),
@@ -360,6 +429,15 @@ async function main(): Promise<void> {
       poolSize:
         harness.mode === 'pooled'
           ? (harness as { poolSize: number }).poolSize
+          : undefined,
+      rewriteArrays: opts.rewriteArrays,
+      rawStream: opts.rawStream,
+      memory:
+        memStart && memEnd
+          ? {
+              start: { heapUsed: memStart.heapUsed, rss: memStart.rss },
+              end: { heapUsed: memEnd.heapUsed, rss: memEnd.rss },
+            }
           : undefined,
     };
 

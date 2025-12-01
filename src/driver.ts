@@ -23,7 +23,11 @@ import { DuckDBSession } from './session.ts';
 import { DuckDBDialect } from './dialect.ts';
 import { DuckDBSelectBuilder } from './select-builder.ts';
 import { aliasFields } from './sql/selection.ts';
-import type { ExecuteInBatchesOptions, RowData } from './client.ts';
+import type {
+  ExecuteBatchesRawChunk,
+  ExecuteInBatchesOptions,
+  RowData,
+} from './client.ts';
 import { closeClientConnection, isPool } from './client.ts';
 import {
   createDuckDBConnectionPool,
@@ -31,11 +35,20 @@ import {
   type DuckDBPoolConfig,
   type PoolPreset,
 } from './pool.ts';
+import {
+  resolvePrepareCacheOption,
+  resolveRewriteArraysOption,
+  type PreparedStatementCacheConfig,
+  type PrepareCacheOption,
+  type RewriteArraysMode,
+  type RewriteArraysOption,
+} from './options.ts';
 
 export interface PgDriverOptions {
   logger?: Logger;
-  rewriteArrays?: boolean;
+  rewriteArrays?: RewriteArraysMode;
   rejectStringArrayLiterals?: boolean;
+  prepareCache?: PreparedStatementCacheConfig;
 }
 
 export class DuckDBDriver {
@@ -52,8 +65,9 @@ export class DuckDBDriver {
   ): DuckDBSession<Record<string, unknown>, TablesRelationalConfig> {
     return new DuckDBSession(this.client, this.dialect, schema, {
       logger: this.options.logger,
-      rewriteArrays: this.options.rewriteArrays,
+      rewriteArrays: this.options.rewriteArrays ?? 'auto',
       rejectStringArrayLiterals: this.options.rejectStringArrayLiterals,
+      prepareCache: this.options.prepareCache,
     });
   }
 }
@@ -69,8 +83,9 @@ export interface DuckDBConnectionConfig {
 export interface DuckDBDrizzleConfig<
   TSchema extends Record<string, unknown> = Record<string, never>,
 > extends DrizzleConfig<TSchema> {
-  rewriteArrays?: boolean;
+  rewriteArrays?: RewriteArraysOption;
   rejectStringArrayLiterals?: boolean;
+  prepareCache?: PrepareCacheOption;
   /** Pool configuration. Use preset name, size config, or false to disable. */
   pool?: DuckDBPoolConfig | PoolPreset | false;
 }
@@ -111,6 +126,8 @@ function createFromClient<
   instance?: DuckDBInstance
 ): DuckDBDatabase<TSchema, ExtractTablesWithRelations<TSchema>> {
   const dialect = new DuckDBDialect();
+  const rewriteArraysMode = resolveRewriteArraysOption(config.rewriteArrays);
+  const prepareCache = resolvePrepareCacheOption(config.prepareCache);
 
   const logger =
     config.logger === true ? new DefaultLogger() : config.logger || undefined;
@@ -131,8 +148,9 @@ function createFromClient<
 
   const driver = new DuckDBDriver(client, dialect, {
     logger,
-    rewriteArrays: config.rewriteArrays,
+    rewriteArrays: rewriteArraysMode,
     rejectStringArrayLiterals: config.rejectStringArrayLiterals,
+    prepareCache,
   });
   const session = driver.createSession(schema);
 
@@ -328,6 +346,13 @@ export class DuckDBDatabase<
     options: ExecuteInBatchesOptions = {}
   ): AsyncGenerator<T[], void, void> {
     return this.session.executeBatches<T>(query, options);
+  }
+
+  executeBatchesRaw(
+    query: SQL,
+    options: ExecuteInBatchesOptions = {}
+  ): AsyncGenerator<ExecuteBatchesRawChunk, void, void> {
+    return this.session.executeBatchesRaw(query, options);
   }
 
   executeArrow(query: SQL): Promise<unknown> {

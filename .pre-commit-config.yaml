@@ -25,13 +25,13 @@ repos:
       # Fast checks (run on every commit)
       - id: prettier
         name: Prettier formatting
-        entry: bunx prettier --check --ignore-unknown
+        entry: bun run prettier --check --ignore-unknown
         language: system
         types_or: [javascript, json, yaml, markdown, ts]
 
       - id: typecheck
         name: TypeScript type check
-        entry: bunx tsc --noEmit --project tsconfig.check.json
+        entry: bun run tsc --noEmit --project tsconfig.check.json
         language: system
         pass_filenames: false
         types: [ts]

@@ -104,9 +104,9 @@ const usersWithPosts = await db.query.users.findMany({
 
 Automatically rewrite Postgres array operators to DuckDB functions.
 
-| Type      | Default | Description                         |
-| --------- | ------- | ----------------------------------- |
-| `boolean` | `true`  | Enable automatic operator rewriting |
+| Type                                                | Default  | Description                                                                           |
+| --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| string (`'auto'`, `'always'`, `'never'`) or boolean | `'auto'` | Control array operator rewriting. `true` maps to `'auto'`; `false` maps to `'never'`. |
 
 **Behavior when enabled**:
 
@@ -119,8 +119,8 @@ Automatically rewrite Postgres array operators to DuckDB functions.
 **Usage**:
 
 ```typescript
-// Default: rewriting enabled
-const db = drizzle(connection, { rewriteArrays: true });
+// Default: rewriting enabled on demand
+const db = drizzle(connection, { rewriteArrays: 'auto' });
 
 // Postgres-style code works automatically
 const results = await db
@@ -129,8 +129,29 @@ const results = await db
   .where(arrayContains(products.tags, ['sale']));
 // Generated: WHERE array_has_all(tags, ['sale'])
 
+// Force rewrite pass even if operators are rare
+const db = drizzle(connection, { rewriteArrays: 'always' });
+
 // Disable rewriting (use DuckDB syntax directly)
-const db = drizzle(connection, { rewriteArrays: false });
+const db = drizzle(connection, { rewriteArrays: 'never' });
+```
+
+### prepareCache
+
+Enable a per-connection prepared statement cache.
+
+| Type                                       | Default | Description                                                    |
+| ------------------------------------------ | ------- | -------------------------------------------------------------- |
+| `boolean` / `number` / `{ size?: number }` | `false` | Cache prepared statements; numbers or `size` set the LRU size. |
+
+**Usage**:
+
+```typescript
+// Enable with default size (32)
+const db = drizzle(connection, { prepareCache: true });
+
+// Custom cache size
+const db = drizzle(connection, { prepareCache: { size: 16 } });
 ```
 
 ### rejectStringArrayLiterals

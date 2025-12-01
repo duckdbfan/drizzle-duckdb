@@ -6,6 +6,10 @@ import {
   type DuckDBConnectionPool,
 } from '../../src/client.ts';
 import { createDuckDBConnectionPool } from '../../src/pool.ts';
+import type {
+  PrepareCacheOption,
+  RewriteArraysMode,
+} from '../../src/options.ts';
 
 export interface PerfHarness {
   connection: DuckDBConnection;
@@ -29,6 +33,10 @@ export interface PerfHarnessOptions {
   pooled?: boolean;
   /** Pool size (default: 4) */
   poolSize?: number;
+  /** Array rewrite mode */
+  rewriteArrays?: RewriteArraysMode;
+  /** Prepared statement cache configuration */
+  prepareCache?: PrepareCacheOption;
 }
 
 export async function createPerfHarness(
@@ -36,6 +44,11 @@ export async function createPerfHarness(
 ): Promise<AnyPerfHarness> {
   const instance = await DuckDBInstance.create(':memory:');
   const connection = await instance.connect();
+
+  const drizzleConfig = {
+    rewriteArrays: options?.rewriteArrays,
+    prepareCache: options?.prepareCache,
+  } as const;
 
   await seedFactTable(connection);
   await seedNarrowWide(connection);
@@ -47,13 +60,13 @@ export async function createPerfHarness(
   if (options?.pooled) {
     const poolSize = options.poolSize ?? 4;
     const pool = createDuckDBConnectionPool(instance, { size: poolSize });
-    const db = drizzle({ client: pool });
+    const db = drizzle({ client: pool, ...drizzleConfig });
     // Close the seeding connection - pool will create its own
     await closeClientConnection(connection);
     return { pool, db, instance, mode: 'pooled', poolSize };
   }
 
-  const db = drizzle(connection);
+  const db = drizzle(connection, drizzleConfig);
   return { connection, db, instance, mode: 'single' };
 }
 
