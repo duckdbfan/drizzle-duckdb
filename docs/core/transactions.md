@@ -94,7 +94,7 @@ try {
 
 > **DuckDB Limitation**
 >
-> DuckDB does **not** support `SAVEPOINT`. This means nested transactions behave differently than in Postgres.
+> DuckDB 1.4.x does **not** support `SAVEPOINT`. The driver will try once per dialect instance; after the syntax error it marks savepoints unsupported and nested calls reuse the outer transaction.
 
 ### What Happens with Nested Transactions
 

@@ -107,6 +107,8 @@ db = await drizzle({
 
 Available presets: `'pulse'` (4), `'standard'` (6), `'jumbo'` (8), `'mega'` (12), `'giga'` (16).
 
+The `pool` option on `drizzle()` controls size/presets. Use manual pools for timeouts, queue limits, or connection recycling.
+
 ### Manual Pool Creation (Advanced)
 
 For more control, create the pool manually:
@@ -127,12 +129,20 @@ export async function getDb() {
     const instance = token
       ? await DuckDBInstance.create('md:', { motherduck_token: token })
       : await DuckDBInstance.create(':memory:');
-    const pool = createDuckDBConnectionPool(instance, { size: 4 });
+    const pool = createDuckDBConnectionPool(instance, {
+      size: 6,
+      acquireTimeout: 15_000,
+      maxWaitingRequests: 150,
+      maxLifetimeMs: 10 * 60_000,
+      idleTimeoutMs: 60_000,
+    });
     db = drizzle(pool, { schema });
   }
   return db;
 }
 ```
+
+This form lets you set acquire timeouts, queue limits, and connection recycling policies in addition to pool size.
 
 ## Usage Examples
 

@@ -13,7 +13,7 @@
 
 <br>
 
-**Drizzle DuckDB** brings [Drizzle ORM](https://orm.drizzle.team/) to [DuckDB](https://duckdb.org/) — the fast in-process analytical database. Get Drizzle's type-safe query builder, automatic migrations, and full TypeScript inference while working with DuckDB's powerful analytics engine.
+**Drizzle DuckDB** brings [Drizzle ORM](https://orm.drizzle.team/) to [DuckDB](https://duckdb.org/), an in-process analytical database. You get Drizzle's type-safe query builder, automatic migrations, and full TypeScript inference while working with DuckDB's analytics engine.
 
 Works with local DuckDB files, in-memory databases, and [MotherDuck](https://motherduck.com/) cloud.
 
@@ -115,95 +115,48 @@ const db = drizzle(connection, {
 });
 ```
 
-## Schema Declaration
+> Tip: With connection strings (recommended), just pass the path: `const db = await drizzle(':memory:')`. Pooling is automatic.
 
-Drizzle DuckDB uses `drizzle-orm/pg-core` for schema definitions since DuckDB's SQL is largely Postgres-compatible:
+## Connection Pooling
 
-```typescript
-import { sql } from 'drizzle-orm';
-import {
-  integer,
-  text,
-  boolean,
-  timestamp,
-  pgTable,
-  pgSchema,
-} from 'drizzle-orm/pg-core';
+DuckDB executes one query per connection. The async `drizzle()` entrypoints create a pool automatically (default size: 4). Options:
 
-// Tables in default schema
-const posts = pgTable('posts', {
-  id: integer('id').primaryKey(),
-  title: text('title').notNull(),
-  published: boolean('published').default(false),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-// Tables in custom schema
-const analytics = pgSchema('analytics');
-
-const events = analytics.table('events', {
-  id: integer('id').primaryKey(),
-  name: text('name').notNull(),
-  timestamp: timestamp('timestamp').defaultNow(),
-});
-```
-
-## DuckDB-Specific Column Types
-
-For DuckDB-specific types like `STRUCT`, `MAP`, `LIST`, and proper timestamp handling, use the custom column helpers:
+- Set pool size or MotherDuck preset: `drizzle('md:', { pool: { size: 8 } })` or `pool: 'jumbo'` / `pool: 'giga'`.
+- Disable pooling for single-connection workloads: `pool: false`.
+- Transactions pin one pooled connection for their entire lifetime; non-transactional queries still use the pool.
+- For tuning (acquire timeout, queue limits, idle/lifetime recycling), create the pool manually:
 
 ```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
 import {
-  duckDbList,
-  duckDbArray,
-  duckDbStruct,
-  duckDbMap,
-  duckDbJson,
-  duckDbTimestamp,
-  duckDbDate,
-  duckDbTime,
+  createDuckDBConnectionPool,
+  drizzle,
 } from '@leonardovida-md/drizzle-neo-duckdb';
 
-const products = pgTable('products', {
-  id: integer('id').primaryKey(),
-
-  // LIST type (variable length)
-  tags: duckDbList('tags', 'TEXT'),
-
-  // ARRAY type (fixed length)
-  coordinates: duckDbArray('coordinates', 'DOUBLE', 3),
-
-  // STRUCT type
-  metadata: duckDbStruct('metadata', {
-    version: 'INTEGER',
-    author: 'TEXT',
-  }),
-
-  // MAP type
-  attributes: duckDbMap('attributes', 'TEXT'),
-
-  // JSON type (use this instead of pg json/jsonb)
-  config: duckDbJson('config'),
-
-  // Timestamp with proper DuckDB handling
-  createdAt: duckDbTimestamp('created_at', { withTimezone: true }),
+const instance = await DuckDBInstance.create('md:', {
+  motherduck_token: process.env.MOTHERDUCK_TOKEN,
 });
+const pool = createDuckDBConnectionPool(instance, {
+  size: 8,
+  acquireTimeout: 20_000,
+  maxWaitingRequests: 200,
+  maxLifetimeMs: 10 * 60_000,
+  idleTimeoutMs: 60_000,
+});
+const db = drizzle(pool);
 ```
 
-See [Column Types Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/api/columns) for complete reference.
+## Schema & Types
 
-### Client-Safe Imports (schemas, drizzle-zod, trpc)
+- Use `drizzle-orm/pg-core` for schemas; DuckDB SQL is largely Postgres-compatible.
+- DuckDB-specific helpers: `duckDbList`, `duckDbArray`, `duckDbStruct`, `duckDbMap`, `duckDbJson`, `duckDbTimestamp`, `duckDbDate`, `duckDbTime`.
+- Browser-safe imports live under `@leonardovida-md/drizzle-neo-duckdb/helpers` (introspection emits this path).
 
-When generated schemas are consumed in client bundles, import the helpers from the browser-safe subpath to avoid pulling the native DuckDB bindings:
+See the [column types](https://leonardovida.github.io/drizzle-neo-duckdb/api/columns) docs for full API.
 
-```typescript
-import {
-  duckDbJson,
-  duckDbList,
-} from '@leonardovida-md/drizzle-neo-duckdb/helpers';
-```
+## Postgres Schema Compatibility
 
-The introspection CLI now emits this import path by default. You can still override `importBasePath` if you need the old root import.
+Use `pgTable`, `pgSchema`, and other `drizzle-orm/pg-core` builders as you do with Postgres. The dialect keeps table definitions and relations intact while adapting queries to DuckDB.
 
 ## Querying
 
@@ -324,6 +277,9 @@ const db = drizzle(connection, {
   // Enable query logging
   logger: new DefaultLogger(),
 
+  // Pool size/preset when using connection strings (default: 4). Set false to disable.
+  pool: { size: 8 },
+
   // Rewrite Postgres array operators to DuckDB functions (default: true)
   rewriteArrays: true,
 
@@ -339,25 +295,28 @@ const db = drizzle(connection, {
 
 This connector aims for compatibility with Drizzle's Postgres driver but has some differences:
 
-| Feature               | Status                                                     |
-| --------------------- | ---------------------------------------------------------- |
-| Basic CRUD operations | Full support                                               |
-| Joins and subqueries  | Full support                                               |
-| Transactions          | No savepoints (nested transactions reuse outer)            |
-| JSON/JSONB columns    | Use `duckDbJson()` instead                                 |
-| Prepared statements   | No statement caching                                       |
-| Streaming results     | Materialized by default; use `executeBatches()` for chunks |
+| Feature               | Status                                                                       |
+| --------------------- | ---------------------------------------------------------------------------- |
+| Basic CRUD operations | Full support                                                                 |
+| Joins and subqueries  | Full support                                                                 |
+| Transactions          | No savepoints (nested transactions reuse outer)                              |
+| JSON/JSONB columns    | Use `duckDbJson()` instead                                                   |
+| Prepared statements   | No statement caching                                                         |
+| Streaming results     | Chunked reads via `executeBatches()` / `executeArrow()`; no cursor streaming |
+| Concurrent queries    | One query per connection; use pooling for parallelism                        |
 
-See [Limitations Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/guide/limitations) for details.
+See [Limitations Documentation](https://leonardovida.github.io/drizzle-neo-duckdb/reference/limitations) for details.
 
 ## Examples
 
-- **[MotherDuck NYC Taxi](./example/motherduck-nyc.ts)** — Query the built-in NYC taxi dataset from MotherDuck cloud
+- **[MotherDuck NYC Taxi](./example/motherduck-nyc.ts)**: Query the built-in NYC taxi dataset from MotherDuck cloud
+- **[Analytics Dashboard](./example/analytics-dashboard.ts)**: Local in-memory analytics with DuckDB types and Parquet loading
 
 Run examples:
 
 ```bash
 MOTHERDUCK_TOKEN=your_token bun example/motherduck-nyc.ts
+bun example/analytics-dashboard.ts
 ```
 
 ## Contributing

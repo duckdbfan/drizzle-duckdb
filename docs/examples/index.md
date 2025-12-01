@@ -8,7 +8,7 @@ permalink: /examples/
 
 # Examples
 
-This section showcases complete, runnable examples demonstrating Drizzle DuckDB in real-world scenarios.
+This section showcases complete, runnable examples demonstrating Drizzle DuckDB in real-world scenarios. All examples live in `/example` and run with Bun.
 
 ## Available Examples
 
@@ -25,6 +25,12 @@ A comprehensive example showing:
 
 **Best for**: Learning DuckDB-specific features and analytical patterns.
 
+Run locally (auto-pooling in-memory):
+
+```bash
+bun example/analytics-dashboard.ts
+```
+
 ### [NYC Taxi (MotherDuck)]({{ '/examples/motherduck-nyc-taxi' | relative_url }})
 
 Cloud database example featuring:
@@ -32,11 +38,18 @@ Cloud database example featuring:
 - MotherDuck connection and authentication
 - Querying sample data (NYC taxi trips)
 - Aggregations with GROUP BY
-- CTEs for complex transformations
+- CTEs for multi-step transformations
 - Date/time operations
 - Percentile calculations
 
 **Best for**: Getting started with MotherDuck and cloud analytics.
+
+Run with auto-pooling (default 4 connections):
+
+```bash
+export MOTHERDUCK_TOKEN=your_token_here
+bun example/motherduck-nyc-taxi.ts
+```
 
 ## Running Examples
 

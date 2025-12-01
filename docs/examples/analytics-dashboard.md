@@ -7,7 +7,7 @@ nav_order: 1
 
 # Analytics Dashboard Example
 
-This example demonstrates a complete analytics dashboard implementation with DuckDB, showcasing multi-table schemas, DuckDB-specific types, transactions, and complex analytical queries.
+This example shows an analytics dashboard with multi-table schemas, DuckDB-specific types, transactions, and analytical queries.
 
 **Source**: [example/analytics-dashboard.ts](https://github.com/leonardovida-md/drizzle-neo-duckdb/blob/main/example/analytics-dashboard.ts)
 
@@ -113,13 +113,26 @@ const events = pgTable('events', {
 
 ## Setting Up the Database
 
-Create tables with sequences for auto-increment:
+Create tables with sequences for auto-increment. Pick a connection style:
 
 ```typescript
+// Single connection (matches the checked-in script)
+import { DuckDBInstance } from '@duckdb/node-api';
+import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
+
 const instance = await DuckDBInstance.create(':memory:');
 const connection = await instance.connect();
 const db = drizzle(connection);
+```
 
+```typescript
+// Auto-pooling for concurrent workloads (default pool size: 4, memory preset)
+import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
+
+const db = await drizzle(':memory:', { pool: 'memory' });
+```
+
+```typescript
 // Create sequences for serial columns
 await db.execute(sql`CREATE SEQUENCE IF NOT EXISTS users_id_seq`);
 await db.execute(sql`CREATE SEQUENCE IF NOT EXISTS products_id_seq`);
@@ -151,7 +164,7 @@ await db.execute(sql`
 
 ## Inserting Data with Transactions
 
-Use transactions for data integrity:
+Use transactions for data integrity (transactions pin a single pooled connection automatically):
 
 ```typescript
 await db.transaction(async (tx) => {
@@ -329,6 +342,11 @@ bun install
 # Run the example
 bun run example/analytics-dashboard.ts
 ```
+
+## Cleanup
+
+- Auto-pooling (`drizzle(':memory:', { pool: ... })`): call `await db.close()` when your app shuts down to close the pool and DuckDB instance.
+- Single-connection script (the checked-in example): closes the connection/instance manually inside the script.
 
 ## Key Takeaways
 

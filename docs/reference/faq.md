@@ -27,7 +27,7 @@ Yes, with some caveats:
 
 1. Use `dialect: 'postgresql'` in your `drizzle.config.ts`
 2. Generated SQL may need manual adjustment for DuckDB compatibility
-3. Some advanced Postgres features won't work
+3. Some Postgres features won't work
 
 ```typescript
 // drizzle.config.ts
@@ -63,13 +63,14 @@ For browser use, consider:
 
 ### What Postgres features don't work?
 
-| Feature                    | Status        | Alternative                    |
-| -------------------------- | ------------- | ------------------------------ |
-| `json()` / `jsonb()`       | Not supported | Use `duckDbJson()`             |
-| `SAVEPOINT`                | Not supported | Avoid nested transactions      |
-| Prepared statement caching | Not available | N/A (minimal impact)           |
-| Result streaming           | Not available | Use pagination                 |
-| `SERIAL` type              | Not available | Use sequences with `nextval()` |
+| Feature                    | Status         | Alternative                                             |
+| -------------------------- | -------------- | ------------------------------------------------------- |
+| `json()` / `jsonb()`       | Not supported  | Use `duckDbJson()`                                      |
+| `SAVEPOINT`                | Not supported  | Avoid nested transactions                               |
+| Prepared statement caching | Not available  | N/A (minimal impact)                                    |
+| Result streaming           | Chunked reads  | Use `executeBatches()` / `executeArrow()` or pagination |
+| Concurrent queries         | One/query/conn | Use connection pooling for parallelism                  |
+| `SERIAL` type              | Not available  | Use sequences with `nextval()`                          |
 
 See [Limitations]({{ '/reference/limitations' | relative_url }}) for the complete list.
 
@@ -179,6 +180,28 @@ while (true) {
   offset += pageSize;
 }
 ```
+
+### How do I tune connection pooling?
+
+- Connection strings auto-create a pool (default size: 4). Set size or MotherDuck presets with `pool: { size: 8 }` or `pool: 'jumbo'`.
+- Disable pooling with `pool: false` if you truly want a single connection.
+- For timeouts/queue limits/recycling, build the pool manually:
+
+```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
+import { createDuckDBConnectionPool } from '@leonardovida-md/drizzle-neo-duckdb';
+
+const instance = await DuckDBInstance.create(':memory:');
+const pool = createDuckDBConnectionPool(instance, {
+  size: 8,
+  acquireTimeout: 20_000,
+  maxWaitingRequests: 200,
+  maxLifetimeMs: 10 * 60_000,
+  idleTimeoutMs: 60_000,
+});
+```
+
+Transactions automatically pin one pooled connection; other queries keep using the pool.
 
 ### Can I use indexes?
 

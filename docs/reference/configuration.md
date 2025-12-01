@@ -19,6 +19,7 @@ const db = drizzle(connection, {
   schema: mySchema,
   rewriteArrays: true,
   rejectStringArrayLiterals: false,
+  pool: { size: 6 },
 });
 ```
 
@@ -152,6 +153,54 @@ await db.execute(sql`SELECT * FROM t WHERE tags = '{a,b}'`);
 const db = drizzle(connection, { rejectStringArrayLiterals: true });
 await db.execute(sql`SELECT * FROM t WHERE tags = '{a,b}'`);
 // Error: Postgres-style array literals are not supported
+```
+
+### pool
+
+Control connection pooling when using async connection strings/config. DuckDB runs one query per connection; pooling enables parallelism.
+
+| Type                                                                          | Default | Description                              |
+| ----------------------------------------------------------------------------- | ------- | ---------------------------------------- |
+| `false`                                                                       | `4`     | Disable pooling (single connection)      |
+| `{ size: number }`                                                            | `4`     | Set pool size                            |
+| `'pulse'`, `'standard'`, `'jumbo'`, `'mega'`, `'giga'`, `'local'`, `'memory'` | `4`     | Preset sizes (MotherDuck/local defaults) |
+
+**Usage**:
+
+```typescript
+// Auto-pooling (default size 4)
+const db = await drizzle('md:');
+
+// Custom size
+const db = await drizzle('md:', { pool: { size: 8 } });
+
+// MotherDuck preset
+const db = await drizzle('md:', { pool: 'jumbo' }); // 8 connections
+
+// Disable pooling
+const db = await drizzle('md:', { pool: false });
+```
+
+For timeouts, queue limits, and connection recycling, build the pool manually:
+
+```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
+import {
+  createDuckDBConnectionPool,
+  drizzle,
+} from '@leonardovida-md/drizzle-neo-duckdb';
+
+const instance = await DuckDBInstance.create('md:', {
+  motherduck_token: process.env.MOTHERDUCK_TOKEN,
+});
+const pool = createDuckDBConnectionPool(instance, {
+  size: 8,
+  acquireTimeout: 20_000,
+  maxWaitingRequests: 200,
+  maxLifetimeMs: 10 * 60_000,
+  idleTimeoutMs: 60_000,
+});
+const db = drizzle(pool);
 ```
 
 ## migrate() Options

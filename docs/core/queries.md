@@ -7,7 +7,7 @@ nav_order: 3
 
 # Queries
 
-Master Drizzle's query builder for DuckDB, including CTEs, aggregations, and advanced patterns.
+Master Drizzle's query builder for DuckDB, including CTEs and aggregations.
 
 ## Basic Queries
 

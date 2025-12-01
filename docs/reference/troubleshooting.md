@@ -328,7 +328,7 @@ const table = pgTable('example', {
 
 1. Use appropriate indexes
 2. Add `LIMIT` clauses for large result sets
-3. Consider using CTEs for complex queries
+3. Consider using CTEs for multi-step queries
 4. Profile with `EXPLAIN ANALYZE`
 
 ```typescript

@@ -31,8 +31,9 @@ This example demonstrates Drizzle DuckDB with MotherDuck cloud database, queryin
 
 ## Connecting to MotherDuck
 
+Use the async `drizzle()` entrypoint for automatic pooling (default pool size: 4). This avoids serializing concurrent requests when hitting MotherDuck from an API or script.
+
 ```typescript
-import { DuckDBInstance } from '@duckdb/node-api';
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
 
 const motherDuckToken = process.env.MOTHERDUCK_TOKEN;
@@ -40,12 +41,36 @@ if (!motherDuckToken) {
   throw new Error('MOTHERDUCK_TOKEN is required');
 }
 
-// Connect using 'md:' prefix
+// Auto-pooling connection (size 4 by default)
+const db = await drizzle({
+  connection: {
+    path: 'md:',
+    options: { motherduck_token: motherDuckToken },
+  },
+  pool: 'standard', // optional preset: pulse(4), standard(6), jumbo(8), mega(12), giga(16)
+});
+```
+
+Want fine-grained pool control (timeouts, queue limits, recycling)? Build the pool manually:
+
+```typescript
+import { DuckDBInstance } from '@duckdb/node-api';
+import {
+  createDuckDBConnectionPool,
+  drizzle,
+} from '@leonardovida-md/drizzle-neo-duckdb';
+
 const instance = await DuckDBInstance.create('md:', {
   motherduck_token: motherDuckToken,
 });
-const connection = await instance.connect();
-const db = drizzle(connection);
+const pool = createDuckDBConnectionPool(instance, {
+  size: 6,
+  acquireTimeout: 15_000,
+  maxWaitingRequests: 150,
+  maxLifetimeMs: 10 * 60_000,
+  idleTimeoutMs: 60_000,
+});
+const db = drizzle(pool);
 ```
 
 ## Schema Definition
@@ -210,15 +235,10 @@ console.log(`Median fare: $${stats.median_fare.toFixed(2)}`);
 
 ## Cleanup
 
-Always clean up connections:
+If you used the async `drizzle()` connection-string form, call `db.close()` to clean up the pool and instance. For manual pools/connections, close them directly.
 
 ```typescript
-try {
-  // ... queries
-} finally {
-  connection.closeSync();
-  instance.closeSync();
-}
+await db.close();
 ```
 
 ## Running the Example

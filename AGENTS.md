@@ -34,3 +34,8 @@
 
 - Use short, imperative subjects under 72 chars (e.g., “Add migrator to exports”, “Bump version to 0.0.7…”). Include a body when documenting workarounds or DuckDB quirks, and reference DuckDB tickets inline.
 - PRs should link issues, summarize behavior changes, call out schema/migration updates, and attach `bun test`/`bun run build` output; screenshots only help when showing SQL traces or unexpected planner output.
+
+## Writing style
+
+- Avoid using em-dashes or dashes "-" and semi columns ";".
+- Avoid using too many adjectives or adverbs

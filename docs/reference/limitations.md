@@ -19,17 +19,18 @@ This page documents known differences between Drizzle DuckDB and Drizzle's stand
 | Subqueries           | Full    |                                                                            |
 | CTEs (WITH clauses)  | Full    |                                                                            |
 | Aggregations         | Full    |                                                                            |
-| Transactions         | Partial | No savepoints                                                              |
-| Prepared statements  | Partial | No statement caching                                                       |
+| Transactions         | Partial | No savepoints (driver probes once, then falls back)                        |
+| Concurrent queries   | Partial | One query per connection; use pooling for parallelism                      |
+| Prepared statements  | Partial | No statement caching; no named statements                                  |
 | JSON/JSONB columns   | None    | Use `duckDbJson()` instead                                                 |
-| Streaming results    | Partial | Default results are materialized; use `executeBatches()` for chunked reads |
+| Streaming results    | Partial | Default materialized; use `executeBatches()` / `executeArrow()` for chunks |
 | Relational queries   | Full    | With schema configuration                                                  |
 
 ## Transactions
 
 ### No Savepoint Support
 
-DuckDB doesn't support `SAVEPOINT`, which means nested transactions behave differently:
+DuckDB 1.4.x doesn't support `SAVEPOINT`, which means nested transactions behave differently. The driver attempts a savepoint once per dialect instance; after a syntax error it marks savepoints unsupported and reuses the outer transaction for nested calls.
 
 ```typescript
 // In Postgres: inner rollback only affects inner transaction
@@ -46,7 +47,7 @@ await db.transaction(async (tx) => {
 });
 ```
 
-**Workaround:** Structure your code to avoid nested transactions, or handle rollback logic at the outer level.
+**Workaround:** Structure your code to avoid nested transactions, or handle rollback logic at the outer level. The driver will attempt a savepoint once per dialect instance; current DuckDB builds reject the syntax, so nested calls fall back to the outer transaction and mark it for rollback on errors.
 
 ## JSON Columns
 
@@ -94,7 +95,7 @@ This has minimal performance impact for most workloads since DuckDB is optimized
 ### Materialized Results
 
 All query results are fully materialized in memory by default.
-Use `db.executeBatches()` to process rows in chunks without holding the entire result set:
+Use `db.executeBatches()` to process rows in chunks without holding the entire result set, or `db.executeArrow()` when Arrow output is available:
 
 ```typescript
 for await (const chunk of db.executeBatches(
@@ -109,9 +110,13 @@ If your runtime exposes an Arrow/columnar API, `db.executeArrow()` will return i
 
 **For very large datasets:** Prefer server-side aggregation, `executeBatches()` for incremental reads, or add `LIMIT`/pagination when you genuinely need all rows.
 
+### One Query Per Connection
+
+DuckDB executes a single query at a time per connection. Without pooling, concurrent requests will serialize. The async `drizzle()` entrypoints auto-create a pool (default size: 4); configure size/presets with the `pool` option or use `createDuckDBConnectionPool` for timeouts, queue limits, and recycling.
+
 ### Column Alias Deduplication
 
-When selecting the same column multiple times (e.g., in complex joins), duplicate aliases are automatically suffixed to avoid collisions:
+When selecting the same column multiple times (e.g., in multi-join queries), duplicate aliases are automatically suffixed to avoid collisions:
 
 ```typescript
 const result = await db
@@ -230,7 +235,7 @@ const table = mySchema.table('events', { ... });
 
 DuckDB is optimized for analytical workloads (OLAP), not transactional workloads (OLTP):
 
-- **Good for:** Aggregations, scans, complex joins on large datasets
+- **Good for:** Aggregations, scans, joins on large datasets
 - **Less optimal for:** High-frequency single-row inserts/updates
 
 For write-heavy workloads, consider batching:
@@ -282,10 +287,10 @@ When running under Bun, certain DuckDB native bindings behave differently than u
 
 ## Workarounds Summary
 
-| Limitation               | Workaround                                  |
-| ------------------------ | ------------------------------------------- |
-| No savepoints            | Avoid nested transactions                   |
-| No JSON/JSONB            | Use `duckDbJson()`                          |
-| No streaming             | Use pagination with LIMIT/OFFSET            |
-| String array warnings    | Use native arrays or DuckDB helpers         |
-| Default schema is `main` | Explicitly use `pgSchema('main')` if needed |
+| Limitation               | Workaround                                              |
+| ------------------------ | ------------------------------------------------------- |
+| No savepoints            | Avoid nested transactions                               |
+| No JSON/JSONB            | Use `duckDbJson()`                                      |
+| No cursor streaming      | Use `executeBatches()` / `executeArrow()` or pagination |
+| String array warnings    | Use native arrays or DuckDB helpers                     |
+| Default schema is `main` | Explicitly use `pgSchema('main')` if needed             |

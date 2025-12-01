@@ -161,7 +161,7 @@ const users = await withDb(async (db) => {
 
 ## Connection Pooling
 
-DuckDB/MotherDuck runs **one query per connection**. Without pooling, concurrent requests serialize and cause slow response times. The `drizzle()` function automatically creates a connection pool when given a connection string.
+DuckDB/MotherDuck runs **one query per connection**. Without pooling, concurrent requests serialize and cause slow response times. The async `drizzle()` entrypoints automatically create a pool (default size: 4) when given a connection string.
 
 ### Pool Size Configuration
 
@@ -179,6 +179,8 @@ const db = await drizzle('md:', { pool: 'giga' }); // 16 connections
 // Disable pooling (single connection)
 const db = await drizzle('md:', { pool: false });
 ```
+
+> The `pool` option on `drizzle()` covers size/presets. For timeouts or recycling behavior, create the pool manually (see below).
 
 ### Pool Presets for MotherDuck
 
@@ -208,6 +210,27 @@ const pool = createDuckDBConnectionPool(instance, { size: 4 });
 const db = drizzle(pool);
 ```
 
+### Advanced Pool Options
+
+`createDuckDBConnectionPool` supports tuning beyond size:
+
+- `acquireTimeout` (ms, default 30_000): fail if a connection isn't available in time
+- `maxWaitingRequests` (default 100): cap queued acquires; throws when full
+- `maxLifetimeMs`: recycle connections after this age
+- `idleTimeoutMs`: recycle idle connections after this idle period
+
+```typescript
+const pool = createDuckDBConnectionPool(instance, {
+  size: 8,
+  acquireTimeout: 20_000,
+  maxWaitingRequests: 200,
+  maxLifetimeMs: 10 * 60_000,
+  idleTimeoutMs: 60_000,
+});
+```
+
+Transactions automatically pin a single pooled connection for the entire callback; other queries continue to use the pool.
+
 ### Multiple Connections Without Pooling
 
 DuckDB supports multiple independent connections:
@@ -235,7 +258,7 @@ const db = await drizzle(':memory:', {
   // Schema for relational queries
   schema: mySchema,
 
-  // Pool configuration (preset, size, or false)
+  // Pool configuration (size/preset; use createDuckDBConnectionPool for timeouts)
   pool: { size: 8 },
 
   // Rewrite Postgres array operators to DuckDB (default: true)
