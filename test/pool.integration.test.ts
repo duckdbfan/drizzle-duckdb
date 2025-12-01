@@ -6,12 +6,13 @@ import { drizzle, createDuckDBConnectionPool } from '../src';
 import { describe, expect, test, beforeAll, afterAll } from 'vitest';
 
 const motherduckToken = process.env.MOTHERDUCK_TOKEN;
+const skipMotherduck = !motherduckToken || process.env.SKIP_MOTHERDUCK === '1';
 
 /**
  * Pool performance tests comparing single connection vs pooled connections.
  * These tests measure the impact of connection pooling on concurrent query execution.
  */
-describe.skipIf(!motherduckToken)('Connection Pooling Performance', () => {
+describe.skipIf(skipMotherduck)('Connection Pooling Performance', () => {
   // Use unique table name per test run to avoid conflicts
   const tableName = `pool_test_${Date.now()}`;
 

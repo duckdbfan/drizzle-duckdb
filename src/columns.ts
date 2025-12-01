@@ -63,7 +63,7 @@ type StructColType = `STRUCT (${string})`;
 
 type Primitive = AnyColType | ListColType | ArrayColType | StructColType;
 
-function coerceArrayString(value: string): unknown[] | undefined {
+export function coerceArrayString(value: string): unknown[] | undefined {
   const trimmed = value.trim();
   if (!trimmed) {
     return [];
@@ -86,7 +86,7 @@ function coerceArrayString(value: string): unknown[] | undefined {
   return undefined;
 }
 
-function formatLiteral(value: unknown, typeHint?: string): string {
+export function formatLiteral(value: unknown, typeHint?: string): string {
   if (value === null || value === undefined) {
     return 'NULL';
   }
@@ -123,7 +123,7 @@ function formatLiteral(value: unknown, typeHint?: string): string {
   return `'${escaped}'`;
 }
 
-function buildListLiteral(values: unknown[], elementType?: string): SQL {
+export function buildListLiteral(values: unknown[], elementType?: string): SQL {
   if (values.length === 0) {
     return sql`[]`;
   }
@@ -135,7 +135,7 @@ function buildListLiteral(values: unknown[], elementType?: string): SQL {
   return sql`list_value(${sql.join(chunks, sql.raw(', '))})`;
 }
 
-function buildStructLiteral(
+export function buildStructLiteral(
   value: Record<string, unknown>,
   schema?: Record<string, Primitive>
 ): SQL {
@@ -154,7 +154,7 @@ function buildStructLiteral(
   return sql`struct_pack(${sql.join(parts, sql.raw(', '))})`;
 }
 
-function buildMapLiteral(
+export function buildMapLiteral(
   value: Record<string, unknown>,
   valueType?: string
 ): SQL {
@@ -188,11 +188,11 @@ export const duckDbList = <TData = unknown>(
       }
       if (typeof value === 'string') {
         const parsed = coerceArrayString(value);
-        if (parsed) {
+        if (parsed !== undefined) {
           return parsed as TData[];
         }
       }
-      return [] as TData[];
+      return value as unknown as TData[];
     },
   })(name);
 
@@ -219,11 +219,11 @@ export const duckDbArray = <TData = unknown>(
       }
       if (typeof value === 'string') {
         const parsed = coerceArrayString(value);
-        if (parsed) {
+        if (parsed !== undefined) {
           return parsed as TData[];
         }
       }
-      return [] as TData[];
+      return value as unknown as TData[];
     },
   })(name);
 

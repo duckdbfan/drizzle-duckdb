@@ -12,6 +12,7 @@ interface CliOptions {
   allDatabases: boolean;
   schemas?: string[];
   outFile: string;
+  outMeta?: string;
   includeViews: boolean;
   useCustomTimeTypes: boolean;
   importBasePath?: string;
@@ -20,6 +21,7 @@ interface CliOptions {
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     outFile: path.resolve(process.cwd(), 'drizzle/schema.ts'),
+    outMeta: undefined,
     allDatabases: false,
     includeViews: false,
     useCustomTimeTypes: true,
@@ -50,6 +52,14 @@ function parseArgs(argv: string[]): CliOptions {
         options.outFile = path.resolve(
           process.cwd(),
           argv[++i] ?? 'drizzle/schema.ts'
+        );
+        break;
+      case '--out-json':
+      case '--outJson':
+      case '--json':
+        options.outMeta = path.resolve(
+          process.cwd(),
+          argv[++i] ?? 'drizzle/schema.meta.json'
         );
         break;
       case '--include-views':
@@ -88,6 +98,7 @@ Options:
   --all-databases  Introspect all attached databases (not just current)
   --schema         Comma separated schema list (defaults to all non-system schemas)
   --out            Output file (default: ./drizzle/schema.ts)
+  --json           Optional JSON metadata output (default: ./drizzle/schema.meta.json)
   --include-views  Include views in the generated schema
   --use-pg-time    Use pg-core timestamp/date/time instead of DuckDB custom helpers
   --import-base    Override import path for duckdb helpers (default: package name)
@@ -136,14 +147,30 @@ async function main() {
 
     await mkdir(path.dirname(options.outFile), { recursive: true });
     await writeFile(options.outFile, result.files.schemaTs, 'utf8');
+    if (options.outMeta) {
+      await mkdir(path.dirname(options.outMeta), { recursive: true });
+      await writeFile(
+        options.outMeta,
+        JSON.stringify(result.files.metaJson, null, 2),
+        'utf8'
+      );
+    }
 
     console.log(`Wrote schema to ${options.outFile}`);
+    if (options.outMeta) {
+      console.log(`Wrote metadata to ${options.outMeta}`);
+    }
   } finally {
     if (
       'closeSync' in connection &&
       typeof connection.closeSync === 'function'
     ) {
       connection.closeSync();
+    }
+    if ('closeSync' in instance && typeof instance.closeSync === 'function') {
+      instance.closeSync();
+    } else if ('close' in instance && typeof instance.close === 'function') {
+      await instance.close();
     }
   }
 }

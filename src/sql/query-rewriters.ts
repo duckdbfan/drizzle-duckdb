@@ -1,96 +1,204 @@
-export function adaptArrayOperators(query: string): string {
-  type ArrayOperator = {
-    token: '@>' | '<@' | '&&';
-    fn: 'array_has_all' | 'array_has_any';
-    swap?: boolean;
-  };
+type ArrayOperator = {
+  token: '@>' | '<@' | '&&';
+  fn: 'array_has_all' | 'array_has_any';
+  swap?: boolean;
+};
 
-  const operators: ArrayOperator[] = [
-    { token: '@>', fn: 'array_has_all' },
-    { token: '<@', fn: 'array_has_all', swap: true },
-    { token: '&&', fn: 'array_has_any' },
-  ];
+const OPERATORS: ArrayOperator[] = [
+  { token: '@>', fn: 'array_has_all' },
+  { token: '<@', fn: 'array_has_all', swap: true },
+  { token: '&&', fn: 'array_has_any' },
+];
 
-  const isWhitespace = (char: string | undefined) =>
-    char !== undefined && /\s/.test(char);
+const isWhitespace = (char: string | undefined) =>
+  char !== undefined && /\s/.test(char);
 
-  const walkLeft = (source: string, start: number): [number, string] => {
-    let idx = start;
-    while (idx >= 0 && isWhitespace(source[idx])) {
-      idx--;
+export function scrubForRewrite(query: string): string {
+  let scrubbed = '';
+  type State = 'code' | 'single' | 'double' | 'lineComment' | 'blockComment';
+  let state: State = 'code';
+
+  for (let i = 0; i < query.length; i += 1) {
+    const char = query[i]!;
+    const next = query[i + 1];
+
+    if (state === 'code') {
+      if (char === "'") {
+        scrubbed += "'";
+        state = 'single';
+        continue;
+      }
+      if (char === '"') {
+        scrubbed += '"';
+        state = 'double';
+        continue;
+      }
+      if (char === '-' && next === '-') {
+        scrubbed += '  ';
+        i += 1;
+        state = 'lineComment';
+        continue;
+      }
+      if (char === '/' && next === '*') {
+        scrubbed += '  ';
+        i += 1;
+        state = 'blockComment';
+        continue;
+      }
+
+      scrubbed += char;
+      continue;
     }
 
-    let depth = 0;
-    let inString = false;
-    for (; idx >= 0; idx--) {
-      const ch = source[idx];
-      if (ch === undefined) break;
-      if (ch === "'" && source[idx - 1] !== '\\') {
-        inString = !inString;
+    if (state === 'single') {
+      if (char === "'" && next === "'") {
+        scrubbed += "''";
+        i += 1;
+        continue;
       }
-      if (inString) continue;
-      if (ch === ')' || ch === ']') {
-        depth++;
-      } else if (ch === '(' || ch === '[') {
-        depth--;
-        if (depth < 0) {
-          return [idx + 1, source.slice(idx + 1, start + 1)];
-        }
-      } else if (depth === 0 && isWhitespace(ch)) {
+      // Preserve quote for boundary detection but mask inner chars with a
+      // non-whitespace placeholder to avoid false positives on operators.
+      scrubbed += char === "'" ? "'" : '.';
+      if (char === "'") {
+        state = 'code';
+      }
+      continue;
+    }
+
+    if (state === 'double') {
+      if (char === '"' && next === '"') {
+        scrubbed += '""';
+        i += 1;
+        continue;
+      }
+      scrubbed += char === '"' ? '"' : '.';
+      if (char === '"') {
+        state = 'code';
+      }
+      continue;
+    }
+
+    if (state === 'lineComment') {
+      scrubbed += char === '\n' ? '\n' : ' ';
+      if (char === '\n') {
+        state = 'code';
+      }
+      continue;
+    }
+
+    if (state === 'blockComment') {
+      if (char === '*' && next === '/') {
+        scrubbed += '  ';
+        i += 1;
+        state = 'code';
+      } else {
+        scrubbed += ' ';
+      }
+    }
+  }
+
+  return scrubbed;
+}
+
+function findNextOperator(
+  scrubbed: string,
+  start: number
+): { index: number; operator: ArrayOperator } | null {
+  for (let idx = start; idx < scrubbed.length; idx += 1) {
+    for (const operator of OPERATORS) {
+      if (scrubbed.startsWith(operator.token, idx)) {
+        return { index: idx, operator };
+      }
+    }
+  }
+  return null;
+}
+
+function walkLeft(
+  source: string,
+  scrubbed: string,
+  start: number
+): [number, string] {
+  let idx = start;
+  while (idx >= 0 && isWhitespace(scrubbed[idx])) {
+    idx -= 1;
+  }
+
+  let depth = 0;
+  for (; idx >= 0; idx -= 1) {
+    const ch = scrubbed[idx];
+    if (ch === ')' || ch === ']') {
+      depth += 1;
+    } else if (ch === '(' || ch === '[') {
+      if (depth === 0) {
         return [idx + 1, source.slice(idx + 1, start + 1)];
       }
+      depth = Math.max(0, depth - 1);
+    } else if (depth === 0 && isWhitespace(ch)) {
+      return [idx + 1, source.slice(idx + 1, start + 1)];
     }
-    return [0, source.slice(0, start + 1)];
-  };
+  }
 
-  const walkRight = (source: string, start: number): [number, string] => {
-    let idx = start;
-    while (idx < source.length && isWhitespace(source[idx])) {
-      idx++;
-    }
+  return [0, source.slice(0, start + 1)];
+}
 
-    let depth = 0;
-    let inString = false;
-    for (; idx < source.length; idx++) {
-      const ch = source[idx];
-      if (ch === undefined) break;
-      if (ch === "'" && source[idx - 1] !== '\\') {
-        inString = !inString;
-      }
-      if (inString) continue;
-      if (ch === '(' || ch === '[') {
-        depth++;
-      } else if (ch === ')' || ch === ']') {
-        depth--;
-        if (depth < 0) {
-          return [idx, source.slice(start, idx)];
-        }
-      } else if (depth === 0 && isWhitespace(ch)) {
+function walkRight(
+  source: string,
+  scrubbed: string,
+  start: number
+): [number, string] {
+  let idx = start;
+  while (idx < scrubbed.length && isWhitespace(scrubbed[idx])) {
+    idx += 1;
+  }
+
+  let depth = 0;
+  for (; idx < scrubbed.length; idx += 1) {
+    const ch = scrubbed[idx];
+    if (ch === '(' || ch === '[') {
+      depth += 1;
+    } else if (ch === ')' || ch === ']') {
+      if (depth === 0) {
         return [idx, source.slice(start, idx)];
       }
+      depth = Math.max(0, depth - 1);
+    } else if (depth === 0 && isWhitespace(ch)) {
+      return [idx, source.slice(start, idx)];
     }
-    return [source.length, source.slice(start)];
-  };
+  }
 
+  return [scrubbed.length, source.slice(start)];
+}
+
+export function adaptArrayOperators(query: string): string {
   let rewritten = query;
-  for (const { token, fn, swap } of operators) {
-    let idx = rewritten.indexOf(token);
-    while (idx !== -1) {
-      const [leftStart, leftExpr] = walkLeft(rewritten, idx - 1);
-      const [rightEnd, rightExpr] = walkRight(rewritten, idx + token.length);
+  let scrubbed = scrubForRewrite(query);
+  let searchStart = 0;
 
-      const left = leftExpr.trim();
-      const right = rightExpr.trim();
+  // Re-run after each replacement to keep indexes aligned with the current string
+  while (true) {
+    const next = findNextOperator(scrubbed, searchStart);
+    if (!next) break;
 
-      const replacement = `${fn}(${swap ? right : left}, ${
-        swap ? left : right
-      })`;
+    const { index, operator } = next;
+    const [leftStart, leftExpr] = walkLeft(rewritten, scrubbed, index - 1);
+    const [rightEnd, rightExpr] = walkRight(
+      rewritten,
+      scrubbed,
+      index + operator.token.length
+    );
 
-      rewritten =
-        rewritten.slice(0, leftStart) + replacement + rewritten.slice(rightEnd);
+    const left = leftExpr.trim();
+    const right = rightExpr.trim();
 
-      idx = rewritten.indexOf(token, leftStart + replacement.length);
-    }
+    const replacement = `${operator.fn}(${operator.swap ? right : left}, ${
+      operator.swap ? left : right
+    })`;
+
+    rewritten =
+      rewritten.slice(0, leftStart) + replacement + rewritten.slice(rightEnd);
+    scrubbed = scrubForRewrite(rewritten);
+    searchStart = leftStart + replacement.length;
   }
 
   return rewritten;

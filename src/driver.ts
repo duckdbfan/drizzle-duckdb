@@ -24,7 +24,7 @@ import { DuckDBDialect } from './dialect.ts';
 import { DuckDBSelectBuilder } from './select-builder.ts';
 import { aliasFields } from './sql/selection.ts';
 import type { ExecuteInBatchesOptions, RowData } from './client.ts';
-import { isPool } from './client.ts';
+import { closeClientConnection, isPool } from './client.ts';
 import {
   createDuckDBConnectionPool,
   resolvePoolSize,
@@ -290,7 +290,20 @@ export class DuckDBDatabase<
     if (isPool(this.$client) && this.$client.close) {
       await this.$client.close();
     }
-    // Note: DuckDBInstance doesn't have a close method in the current API
+    if (!isPool(this.$client)) {
+      await closeClientConnection(this.$client);
+    }
+    if (this.$instance) {
+      const maybeClosable = this.$instance as unknown as {
+        close?: () => Promise<void> | void;
+        closeSync?: () => void;
+      };
+      if (typeof maybeClosable.close === 'function') {
+        await maybeClosable.close();
+      } else if (typeof maybeClosable.closeSync === 'function') {
+        maybeClosable.closeSync();
+      }
+    }
   }
 
   select(): DuckDBSelectBuilder<undefined>;

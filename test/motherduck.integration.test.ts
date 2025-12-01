@@ -12,8 +12,9 @@ import { introspect } from '../src/introspect';
 import { expect, test } from 'vitest';
 
 const motherduckToken = process.env.MOTHERDUCK_TOKEN;
+const skipMotherduck = !motherduckToken || process.env.SKIP_MOTHERDUCK === '1';
 
-if (!motherduckToken) {
+if (skipMotherduck) {
   test.skip('MotherDuck integration requires MOTHERDUCK_TOKEN');
 } else {
   test('runs the MotherDuck nyc.taxi example against sample_data', async () => {

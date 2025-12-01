@@ -101,3 +101,23 @@ test('adaptArrayOperators preserves parentheses and complex expressions', () => 
   expect(rewritten).toContain('array_has_all(tags, list_value(1, 2))');
   expect(rewritten).toContain('array_has_any(numbers, array[2,3])');
 });
+
+test('adaptArrayOperators skips strings and comments', () => {
+  const query = `
+    select
+      '@>' as literal,
+      array['&&'] as arr
+      , json '{"tags": ["@>"]}' as payload
+    from items
+    -- tags @> list_value(1)
+    where tags @> list_value(1) /* numbers && array[2,3] */
+  `;
+
+  const rewritten = adaptArrayOperators(query);
+
+  expect(rewritten).toContain("'@>' as literal");
+  expect(rewritten).toContain("array['&&'] as arr");
+  expect(rewritten).toContain(`json '{"tags": ["@>"]}'`);
+  expect(rewritten).toContain('array_has_all(tags, list_value(1))');
+  expect(rewritten).not.toContain('array_has_any(numbers, array[2,3])');
+});

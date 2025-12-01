@@ -10,6 +10,15 @@
  * - Complex aggregations and window functions
  * - Loading and querying Parquet files directly
  * - Array operations with DuckDB helpers
+ * - Connection pooling for production use
+ *
+ * Note: This example uses a single connection for simplicity.
+ * For production use with concurrent queries, use connection pooling:
+ *
+ *   const db = await drizzle({
+ *     connection: ':memory:',
+ *     pool: 'memory', // or { size: 4 }
+ *   });
  */
 
 import { DuckDBInstance } from '@duckdb/node-api';

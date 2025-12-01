@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { asc, avg, eq, sql, sum } from 'drizzle-orm';
 import { Bench } from 'tinybench';
 import { closePerfHarness, createPerfHarness } from '../test/perf/setup.ts';
-import type { PerfHarness } from '../test/perf/setup.ts';
+import type { AnyPerfHarness } from '../test/perf/setup.ts';
 import {
   benchComplex,
   benchInsert,
@@ -20,10 +20,12 @@ import { olap, sumN } from '../src/olap.ts';
 type CliOptions = {
   ghaOutput?: string;
   repeat: number;
+  pooled: boolean;
+  poolSize: number;
 };
 
 function parseArgs(argv: string[]): CliOptions {
-  const opts: CliOptions = { repeat: 1 };
+  const opts: CliOptions = { repeat: 1, pooled: false, poolSize: 4 };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--gha-output') {
@@ -31,6 +33,11 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--repeat') {
       const next = argv[++i];
       opts.repeat = next ? Number.parseInt(next, 10) : 1;
+    } else if (arg === '--pooled') {
+      opts.pooled = true;
+    } else if (arg === '--pool-size') {
+      const next = argv[++i];
+      opts.poolSize = next ? Number.parseInt(next, 10) : 4;
     }
   }
   return opts;
@@ -38,9 +45,17 @@ function parseArgs(argv: string[]): CliOptions {
 
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
-  let harness: PerfHarness | undefined;
+  let harness: AnyPerfHarness | undefined;
   try {
-    harness = await createPerfHarness();
+    harness = await createPerfHarness({
+      pooled: opts.pooled,
+      poolSize: opts.poolSize,
+    });
+    const modeLabel =
+      harness.mode === 'pooled'
+        ? `pooled (size=${(harness as { poolSize: number }).poolSize})`
+        : 'single';
+    console.log(`Running benchmarks in ${modeLabel} mode...`);
     const insertBatch = Array.from({ length: 100 }, (_, i) => ({
       id: i,
       val: `payload-${i}`,
@@ -194,6 +209,97 @@ async function main(): Promise<void> {
         await harness!.db.executeArrow(sql`select * from ${factLarge}`);
       });
 
+      // Parallel benchmarks - only run in pooled mode because DuckDB's Node API
+      // has intermittent failures with concurrent parameterized queries on a
+      // single connection. The pool provides separate connections per query.
+      if (harness!.mode === 'pooled') {
+        bench.add('parallel select x4', async () => {
+          await Promise.all([
+            harness!.db
+              .select({ id: factLarge.id })
+              .from(factLarge)
+              .where(eq(factLarge.id, 1))
+              .limit(1),
+            harness!.db
+              .select({ id: factLarge.id })
+              .from(factLarge)
+              .where(eq(factLarge.id, 2))
+              .limit(1),
+            harness!.db
+              .select({ id: factLarge.id })
+              .from(factLarge)
+              .where(eq(factLarge.id, 3))
+              .limit(1),
+            harness!.db
+              .select({ id: factLarge.id })
+              .from(factLarge)
+              .where(eq(factLarge.id, 4))
+              .limit(1),
+          ]);
+        });
+
+        bench.add('parallel select x8', async () => {
+          await Promise.all(
+            Array.from({ length: 8 }, (_, i) =>
+              harness!.db
+                .select({ id: factLarge.id })
+                .from(factLarge)
+                .where(eq(factLarge.id, i))
+                .limit(1)
+            )
+          );
+        });
+
+        bench.add('parallel aggregation x4', async () => {
+          await Promise.all([
+            harness!.db
+              .select({ avgValue: avg(factLarge.value) })
+              .from(factLarge)
+              .where(eq(factLarge.mod100, 0)),
+            harness!.db
+              .select({ avgValue: avg(factLarge.value) })
+              .from(factLarge)
+              .where(eq(factLarge.mod100, 25)),
+            harness!.db
+              .select({ avgValue: avg(factLarge.value) })
+              .from(factLarge)
+              .where(eq(factLarge.mod100, 50)),
+            harness!.db
+              .select({ avgValue: avg(factLarge.value) })
+              .from(factLarge)
+              .where(eq(factLarge.mod100, 75)),
+          ]);
+        });
+
+        bench.add('parallel mixed read/write x4', async () => {
+          const base = mixedId;
+          mixedId += 4;
+          await Promise.all([
+            harness!.db
+              .select()
+              .from(factLarge)
+              .where(eq(factLarge.id, 100))
+              .limit(1),
+            harness!.db
+              .select()
+              .from(factLarge)
+              .where(eq(factLarge.id, 200))
+              .limit(1),
+            harness!.db.insert(benchInsert).values([{ id: base, val: 'p1' }]),
+            harness!.db
+              .insert(benchInsert)
+              .values([{ id: base + 1, val: 'p2' }]),
+          ]);
+        });
+
+        bench.add('parallel wide scan x2', async () => {
+          await Promise.all([
+            harness!.db.select().from(narrowWide),
+            harness!.db.select().from(narrowWide),
+          ]);
+        });
+      }
+
       await bench.warmup();
       await bench.run();
 
@@ -250,15 +356,24 @@ async function main(): Promise<void> {
       arch: process.arch,
       cpu: cpus()[0]?.model ?? 'unknown',
       repeat: opts.repeat,
+      mode: harness.mode,
+      poolSize:
+        harness.mode === 'pooled'
+          ? (harness as { poolSize: number }).poolSize
+          : undefined,
     };
 
     const payload = { meta, results };
 
     const outDir = 'perf-results';
     await mkdir(outDir, { recursive: true });
+    const modeSuffix =
+      harness.mode === 'pooled'
+        ? `-pool${(harness as { poolSize: number }).poolSize}`
+        : '-single';
     const outFile = join(
       outDir,
-      `${meta.timestamp.replace(/[:.]/g, '-')}-${meta.gitSha}.json`
+      `${meta.timestamp.replace(/[:.]/g, '-')}-${meta.gitSha}${modeSuffix}.json`
     );
     await writeFile(outFile, JSON.stringify(payload, null, 2));
     console.log(`perf results -> ${outFile}`);

@@ -1,15 +1,39 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import type { DuckDBConnection } from '@duckdb/node-api';
-import { sql } from 'drizzle-orm';
 import { drizzle, type DuckDBDatabase } from '../../src/index.ts';
-import { closeClientConnection } from '../../src/client.ts';
+import {
+  closeClientConnection,
+  type DuckDBConnectionPool,
+} from '../../src/client.ts';
+import { createDuckDBConnectionPool } from '../../src/pool.ts';
 
 export interface PerfHarness {
   connection: DuckDBConnection;
   db: DuckDBDatabase;
+  instance: DuckDBInstance;
+  mode: 'single';
 }
 
-export async function createPerfHarness(): Promise<PerfHarness> {
+export interface PooledPerfHarness {
+  pool: DuckDBConnectionPool;
+  db: DuckDBDatabase;
+  instance: DuckDBInstance;
+  mode: 'pooled';
+  poolSize: number;
+}
+
+export type AnyPerfHarness = PerfHarness | PooledPerfHarness;
+
+export interface PerfHarnessOptions {
+  /** Use connection pooling instead of single connection */
+  pooled?: boolean;
+  /** Pool size (default: 4) */
+  poolSize?: number;
+}
+
+export async function createPerfHarness(
+  options?: PerfHarnessOptions
+): Promise<AnyPerfHarness> {
   const instance = await DuckDBInstance.create(':memory:');
   const connection = await instance.connect();
 
@@ -20,13 +44,25 @@ export async function createPerfHarness(): Promise<PerfHarness> {
   await createPreparedTable(connection);
   await createComplexTable(connection);
 
-  const db = drizzle(connection);
+  if (options?.pooled) {
+    const poolSize = options.poolSize ?? 4;
+    const pool = createDuckDBConnectionPool(instance, { size: poolSize });
+    const db = drizzle({ client: pool });
+    // Close the seeding connection - pool will create its own
+    await closeClientConnection(connection);
+    return { pool, db, instance, mode: 'pooled', poolSize };
+  }
 
-  return { connection, db };
+  const db = drizzle(connection);
+  return { connection, db, instance, mode: 'single' };
 }
 
-export async function closePerfHarness(harness: PerfHarness): Promise<void> {
-  await closeClientConnection(harness.connection);
+export async function closePerfHarness(harness: AnyPerfHarness): Promise<void> {
+  if (harness.mode === 'pooled') {
+    await harness.pool.close();
+  } else {
+    await closeClientConnection(harness.connection);
+  }
 }
 
 async function seedFactTable(connection: DuckDBConnection): Promise<void> {

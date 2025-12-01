@@ -32,12 +32,22 @@ import {
 } from './value-wrappers-core.ts';
 
 /**
- * Convert a Date or string to microseconds since Unix epoch.
- * Handles both Date objects and ISO-like timestamp strings.
+ * Convert a Date/string/epoch number to microseconds since Unix epoch.
+ * Handles Date objects, ISO-like strings, bigint, and millisecond numbers.
  */
-function dateToMicros(value: Date | string): bigint {
+function dateToMicros(value: Date | string | number | bigint): bigint {
   if (value instanceof Date) {
     return BigInt(value.getTime()) * 1000n;
+  }
+
+  if (typeof value === 'bigint') {
+    // Assume bigint already in microseconds (DuckDB default)
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    // Assume JS milliseconds
+    return BigInt(Math.trunc(value)) * 1000n;
   }
 
   // For strings, normalize the format for reliable parsing

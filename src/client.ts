@@ -49,17 +49,20 @@ export function prepareParams(
   options: PrepareParamsOptions = {}
 ): unknown[] {
   return params.map((param) => {
-    if (typeof param === 'string' && isPgArrayLiteral(param)) {
-      if (options.rejectStringArrayLiterals) {
-        throw new Error(
-          'Stringified array literals are not supported. Use duckDbList()/duckDbArray() or pass native arrays.'
-        );
-      }
+    if (typeof param === 'string') {
+      const trimmed = param.trim();
+      if (trimmed && isPgArrayLiteral(trimmed)) {
+        if (options.rejectStringArrayLiterals) {
+          throw new Error(
+            'Stringified array literals are not supported. Use duckDbList()/duckDbArray() or pass native arrays.'
+          );
+        }
 
-      if (options.warnOnStringArrayLiteral) {
-        options.warnOnStringArrayLiteral();
+        if (options.warnOnStringArrayLiteral) {
+          options.warnOnStringArrayLiteral();
+        }
+        return parsePgArrayLiteral(trimmed);
       }
-      return parsePgArrayLiteral(param);
     }
     return param;
   });

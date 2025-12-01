@@ -51,3 +51,11 @@ repos:
         language: system
         pass_filenames: false
         stages: [manual]
+
+      # Performance benchmark (manual/CI only - takes ~2min)
+      - id: perf
+        name: Performance benchmark
+        entry: bun run perf:run -- --repeat 3
+        language: system
+        pass_filenames: false
+        stages: [manual]

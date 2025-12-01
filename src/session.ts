@@ -17,8 +17,8 @@ import { fillPlaceholders, type Query, SQL, sql } from 'drizzle-orm/sql/sql';
 import type { Assume } from 'drizzle-orm/utils';
 import { adaptArrayOperators } from './sql/query-rewriters.ts';
 import { mapResultRow } from './sql/result-mapper.ts';
-import type { DuckDBDialect } from './dialect.ts';
 import { TransactionRollbackError } from 'drizzle-orm/errors';
+import type { DuckDBDialect } from './dialect.ts';
 import type {
   DuckDBClientLike,
   DuckDBConnectionPool,
@@ -35,6 +35,16 @@ import { isPool } from './client.ts';
 import type { DuckDBConnection } from '@duckdb/node-api';
 
 export type { DuckDBClientLike, RowData } from './client.ts';
+
+function isSavepointSyntaxError(error: unknown): boolean {
+  if (!(error instanceof Error) || !error.message) {
+    return false;
+  }
+  return (
+    error.message.toLowerCase().includes('savepoint') &&
+    error.message.toLowerCase().includes('syntax error')
+  );
+}
 
 export class DuckDBPreparedQuery<
   T extends PreparedQueryConfig,
@@ -131,6 +141,7 @@ export class DuckDBSession<
   private rewriteArrays: boolean;
   private rejectStringArrayLiterals: boolean;
   private hasWarnedArrayLiteral = false;
+  private rollbackOnly = false;
 
   constructor(
     private client: DuckDBClientLike,
@@ -168,8 +179,19 @@ export class DuckDBSession<
     );
   }
 
+  override execute<T>(query: SQL): Promise<T> {
+    this.dialect.resetPgJsonFlag();
+    return super.execute(query);
+  }
+
+  override all<T = unknown>(query: SQL): Promise<T[]> {
+    this.dialect.resetPgJsonFlag();
+    return super.all(query);
+  }
+
   override async transaction<T>(
-    transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>
+    transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>,
+    config?: PgTransactionConfig
   ): Promise<T> {
     let pinnedConnection: DuckDBConnection | undefined;
     let pool: DuckDBConnectionPool | undefined;
@@ -197,8 +219,16 @@ export class DuckDBSession<
     try {
       await tx.execute(sql`BEGIN TRANSACTION;`);
 
+      if (config) {
+        await tx.setTransaction(config);
+      }
+
       try {
         const result = await transaction(tx);
+        if (session.isRollbackOnly()) {
+          await tx.execute(sql`rollback`);
+          throw new TransactionRollbackError();
+        }
         await tx.execute(sql`commit`);
         return result;
       } catch (error) {
@@ -227,7 +257,9 @@ export class DuckDBSession<
     query: SQL,
     options: ExecuteInBatchesOptions = {}
   ): AsyncGenerator<GenericRowData<T>[], void, void> {
+    this.dialect.resetPgJsonFlag();
     const builtQuery = this.dialect.sqlToQuery(query);
+    this.dialect.assertNoPgJsonColumns();
     const params = prepareParams(builtQuery.params, {
       rejectStringArrayLiterals: this.rejectStringArrayLiterals,
       warnOnStringArrayLiteral: this.rejectStringArrayLiterals
@@ -256,7 +288,9 @@ export class DuckDBSession<
   }
 
   async executeArrow(query: SQL): Promise<unknown> {
+    this.dialect.resetPgJsonFlag();
     const builtQuery = this.dialect.sqlToQuery(query);
+    this.dialect.assertNoPgJsonColumns();
     const params = prepareParams(builtQuery.params, {
       rejectStringArrayLiterals: this.rejectStringArrayLiterals,
       warnOnStringArrayLiteral: this.rejectStringArrayLiterals
@@ -277,6 +311,14 @@ export class DuckDBSession<
     this.logger.logQuery(rewrittenQuery, params);
 
     return executeArrowOnClient(this.client, rewrittenQuery, params);
+  }
+
+  markRollbackOnly(): void {
+    this.rollbackOnly = true;
+  }
+
+  isRollbackOnly(): boolean {
+    return this.rollbackOnly;
   }
 }
 
@@ -346,14 +388,65 @@ export class DuckDBTransaction<
   ): Promise<T> {
     // Cast needed: PgTransaction doesn't expose dialect/session properties in public API
     type Tx = DuckDBTransactionWithInternals<TFullSchema, TSchema>;
+    const internals = this as unknown as Tx;
+    const savepoint = `drizzle_savepoint_${this.nestedIndex + 1}`;
+    const savepointSql = sql.raw(`savepoint ${savepoint}`);
+    const releaseSql = sql.raw(`release savepoint ${savepoint}`);
+    const rollbackSql = sql.raw(`rollback to savepoint ${savepoint}`);
+
     const nestedTx = new DuckDBTransaction<TFullSchema, TSchema>(
-      (this as unknown as Tx).dialect,
-      (this as unknown as Tx).session,
+      internals.dialect,
+      internals.session,
       this.schema,
       this.nestedIndex + 1
     );
 
-    return transaction(nestedTx);
+    // Check dialect-level savepoint support (per-instance, not global)
+    if (internals.dialect.areSavepointsUnsupported()) {
+      return this.runNestedWithoutSavepoint(transaction, nestedTx, internals);
+    }
+
+    let createdSavepoint = false;
+    try {
+      await internals.session.execute(savepointSql);
+      internals.dialect.markSavepointsSupported();
+      createdSavepoint = true;
+    } catch (error) {
+      if (!isSavepointSyntaxError(error)) {
+        throw error;
+      }
+      internals.dialect.markSavepointsUnsupported();
+      return this.runNestedWithoutSavepoint(transaction, nestedTx, internals);
+    }
+
+    try {
+      const result = await transaction(nestedTx);
+      if (createdSavepoint) {
+        await internals.session.execute(releaseSql);
+      }
+      return result;
+    } catch (error) {
+      if (createdSavepoint) {
+        await internals.session.execute(rollbackSql);
+      }
+      (
+        internals.session as DuckDBSession<TFullSchema, TSchema>
+      ).markRollbackOnly();
+      throw error;
+    }
+  }
+
+  private runNestedWithoutSavepoint<T>(
+    transaction: (tx: DuckDBTransaction<TFullSchema, TSchema>) => Promise<T>,
+    nestedTx: DuckDBTransaction<TFullSchema, TSchema>,
+    internals: DuckDBTransactionWithInternals<TFullSchema, TSchema>
+  ): Promise<T> {
+    return transaction(nestedTx).catch((error) => {
+      (
+        internals.session as DuckDBSession<TFullSchema, TSchema>
+      ).markRollbackOnly();
+      throw error;
+    });
   }
 }
 

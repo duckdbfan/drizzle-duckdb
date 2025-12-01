@@ -43,6 +43,14 @@ export function resolvePoolSize(
 export interface DuckDBConnectionPoolOptions {
   /** Maximum concurrent connections. Defaults to 4. */
   size?: number;
+  /** Timeout in milliseconds to wait for a connection. Defaults to 30000 (30s). */
+  acquireTimeout?: number;
+  /** Maximum number of requests waiting for a connection. Defaults to 100. */
+  maxWaitingRequests?: number;
+  /** Max time (ms) a connection may live before being recycled. */
+  maxLifetimeMs?: number;
+  /** Max idle time (ms) before an idle connection is discarded. */
+  idleTimeoutMs?: number;
 }
 
 export function createDuckDBConnectionPool(
@@ -50,49 +58,211 @@ export function createDuckDBConnectionPool(
   options: DuckDBConnectionPoolOptions = {}
 ): DuckDBConnectionPool & { size: number } {
   const size = options.size && options.size > 0 ? options.size : 4;
-  const idle: DuckDBConnection[] = [];
-  const waiting: Array<(conn: DuckDBConnection) => void> = [];
+  const acquireTimeout = options.acquireTimeout ?? 30_000;
+  const maxWaitingRequests = options.maxWaitingRequests ?? 100;
+  const maxLifetimeMs = options.maxLifetimeMs;
+  const idleTimeoutMs = options.idleTimeoutMs;
+  const metadata = new WeakMap<
+    DuckDBConnection,
+    { createdAt: number; lastUsedAt: number }
+  >();
+
+  type PooledConnection = {
+    connection: DuckDBConnection;
+    createdAt: number;
+    lastUsedAt: number;
+  };
+
+  const idle: PooledConnection[] = [];
+  const waiting: Array<{
+    resolve: (conn: DuckDBConnection) => void;
+    reject: (error: Error) => void;
+    timeoutId: ReturnType<typeof setTimeout>;
+  }> = [];
   let total = 0;
   let closed = false;
+  // Track pending acquires to handle race conditions during close
+  let pendingAcquires = 0;
+
+  const shouldRecycle = (conn: PooledConnection, now: number): boolean => {
+    if (maxLifetimeMs !== undefined && now - conn.createdAt >= maxLifetimeMs) {
+      return true;
+    }
+    if (idleTimeoutMs !== undefined && now - conn.lastUsedAt >= idleTimeoutMs) {
+      return true;
+    }
+    return false;
+  };
 
   const acquire = async (): Promise<DuckDBConnection> => {
     if (closed) {
       throw new Error('DuckDB connection pool is closed');
     }
 
-    if (idle.length > 0) {
-      return idle.pop() as DuckDBConnection;
+    while (idle.length > 0) {
+      const pooled = idle.pop() as PooledConnection;
+      const now = Date.now();
+      if (shouldRecycle(pooled, now)) {
+        await closeClientConnection(pooled.connection);
+        total = Math.max(0, total - 1);
+        metadata.delete(pooled.connection);
+        continue;
+      }
+      pooled.lastUsedAt = now;
+      metadata.set(pooled.connection, {
+        createdAt: pooled.createdAt,
+        lastUsedAt: pooled.lastUsedAt,
+      });
+      return pooled.connection;
     }
 
     if (total < size) {
+      pendingAcquires += 1;
       total += 1;
-      return await DuckDBConnection.create(instance);
+      try {
+        const connection = await DuckDBConnection.create(instance);
+        // Check if pool was closed during async connection creation
+        if (closed) {
+          await closeClientConnection(connection);
+          total -= 1;
+          throw new Error('DuckDB connection pool is closed');
+        }
+        const now = Date.now();
+        metadata.set(connection, { createdAt: now, lastUsedAt: now });
+        return connection;
+      } catch (error) {
+        total -= 1;
+        throw error;
+      } finally {
+        pendingAcquires -= 1;
+      }
     }
 
-    return await new Promise((resolve) => {
-      waiting.push(resolve);
+    // Check queue limit before waiting
+    if (waiting.length >= maxWaitingRequests) {
+      throw new Error(
+        `DuckDB connection pool queue is full (max ${maxWaitingRequests} waiting requests)`
+      );
+    }
+
+    return await new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        // Remove this waiter from the queue
+        const idx = waiting.findIndex((w) => w.timeoutId === timeoutId);
+        if (idx !== -1) {
+          waiting.splice(idx, 1);
+        }
+        reject(
+          new Error(
+            `DuckDB connection pool acquire timeout after ${acquireTimeout}ms`
+          )
+        );
+      }, acquireTimeout);
+
+      waiting.push({ resolve, reject, timeoutId });
     });
   };
 
   const release = async (connection: DuckDBConnection): Promise<void> => {
-    if (closed) {
-      await closeClientConnection(connection);
-      return;
-    }
-
     const waiter = waiting.shift();
     if (waiter) {
-      waiter(connection);
+      clearTimeout(waiter.timeoutId);
+      const now = Date.now();
+      const meta =
+        metadata.get(connection) ??
+        ({ createdAt: now, lastUsedAt: now } as {
+          createdAt: number;
+          lastUsedAt: number;
+        });
+
+      const expired =
+        maxLifetimeMs !== undefined && now - meta.createdAt >= maxLifetimeMs;
+
+      if (closed) {
+        await closeClientConnection(connection);
+        total = Math.max(0, total - 1);
+        metadata.delete(connection);
+        waiter.reject(new Error('DuckDB connection pool is closed'));
+        return;
+      }
+
+      if (expired) {
+        await closeClientConnection(connection);
+        total = Math.max(0, total - 1);
+        metadata.delete(connection);
+        try {
+          const replacement = await acquire();
+          waiter.resolve(replacement);
+        } catch (error) {
+          waiter.reject(error as Error);
+        }
+        return;
+      }
+
+      meta.lastUsedAt = now;
+      metadata.set(connection, meta);
+      waiter.resolve(connection);
       return;
     }
 
-    idle.push(connection);
+    if (closed) {
+      await closeClientConnection(connection);
+      metadata.delete(connection);
+      total = Math.max(0, total - 1);
+      return;
+    }
+
+    const now = Date.now();
+    const existingMeta =
+      metadata.get(connection) ??
+      ({ createdAt: now, lastUsedAt: now } as {
+        createdAt: number;
+        lastUsedAt: number;
+      });
+    existingMeta.lastUsedAt = now;
+    metadata.set(connection, existingMeta);
+
+    if (
+      maxLifetimeMs !== undefined &&
+      now - existingMeta.createdAt >= maxLifetimeMs
+    ) {
+      await closeClientConnection(connection);
+      total -= 1;
+      metadata.delete(connection);
+      return;
+    }
+
+    idle.push({
+      connection,
+      createdAt: existingMeta.createdAt,
+      lastUsedAt: existingMeta.lastUsedAt,
+    });
   };
 
   const close = async (): Promise<void> => {
     closed = true;
+
+    // Clear all waiting requests with their timeouts
+    const waiters = waiting.splice(0, waiting.length);
+    for (const waiter of waiters) {
+      clearTimeout(waiter.timeoutId);
+      waiter.reject(new Error('DuckDB connection pool is closed'));
+    }
+
+    // Close all idle connections (use allSettled to ensure all are attempted)
     const toClose = idle.splice(0, idle.length);
-    await Promise.all(toClose.map((conn) => closeClientConnection(conn)));
+    await Promise.allSettled(
+      toClose.map((item) => closeClientConnection(item.connection))
+    );
+    total = Math.max(0, total - toClose.length);
+    toClose.forEach((item) => metadata.delete(item.connection));
+
+    // Wait for pending acquires to complete (with a reasonable timeout)
+    const maxWait = 5000;
+    const start = Date.now();
+    while (pendingAcquires > 0 && Date.now() - start < maxWait) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
   };
 
   return {

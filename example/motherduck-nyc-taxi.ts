@@ -5,11 +5,12 @@
  * querying NYC taxi sample data from MotherDuck's sample_data database.
  *
  * Features demonstrated:
- * - Connecting to MotherDuck cloud database
+ * - Connecting to MotherDuck cloud database with connection pooling
  * - Drizzle query builder with type-safe schema
  * - Aggregations and groupBy operations
  * - Raw SQL execution with CTEs
  * - Window functions and date operations
+ * - Parallel queries using connection pool
  *
  * Prerequisites:
  * - Set MOTHERDUCK_TOKEN environment variable with your MotherDuck token
@@ -18,8 +19,6 @@
  *   MOTHERDUCK_TOKEN=your_token bun run example/motherduck-nyc-taxi.ts
  */
 
-import { DuckDBInstance } from '@duckdb/node-api';
-import type { DuckDBConnection } from '@duckdb/node-api';
 import { drizzle } from '../src/index.ts';
 import { sql } from 'drizzle-orm';
 import {
@@ -49,19 +48,20 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('Connecting to MotherDuck...\n');
+  console.log('Connecting to MotherDuck with connection pooling...\n');
 
-  // Connect to MotherDuck by passing the token in the config
-  const instance = await DuckDBInstance.create('md:', {
-    motherduck_token: motherDuckToken,
+  // Connect to MotherDuck using the connection string API with automatic pooling
+  // The 'standard' pool preset is optimized for MotherDuck's Standard instance type
+  const db = await drizzle({
+    connection: {
+      path: 'md:',
+      options: { motherduck_token: motherDuckToken },
+    },
+    pool: 'standard', // Use 'standard' preset (6 connections) for MotherDuck
   });
-  let connection: DuckDBConnection | undefined;
 
   try {
-    connection = await instance.connect();
-    const db = drizzle(connection);
-
-    console.log('Connected to MotherDuck!\n');
+    console.log('Connected to MotherDuck with connection pool!\n');
     console.log('='.repeat(60));
     console.log('NYC TAXI DATA ANALYSIS');
     console.log('='.repeat(60));
@@ -221,12 +221,38 @@ async function main() {
     );
     console.log(`  Max fare:        $${Number(stats.max_fare).toFixed(2)}`);
 
+    // 6. Demonstrate parallel queries with connection pool
+    console.log('\n6. Running parallel queries (pool advantage):');
+    const parallelStart = performance.now();
+    const [hourly, distance, passengers] = await Promise.all([
+      db.execute(sql`
+        SELECT date_part('hour', tpep_pickup_datetime) as hour, COUNT(*) as trips
+        FROM taxi_sample GROUP BY 1 ORDER BY 1 LIMIT 5
+      `),
+      db.execute(sql`
+        SELECT CASE WHEN trip_distance < 5 THEN 'short' ELSE 'long' END as type, COUNT(*) as trips
+        FROM taxi_sample GROUP BY 1
+      `),
+      db.execute(sql`
+        SELECT passenger_count, AVG(total_amount) as avg_fare
+        FROM taxi_sample GROUP BY 1 ORDER BY 1 LIMIT 5
+      `),
+    ]);
+    const parallelTime = performance.now() - parallelStart;
+
+    console.log(
+      `  Executed 3 queries in parallel: ${parallelTime.toFixed(0)}ms`
+    );
+    console.log(`  Hourly results: ${hourly.length} rows`);
+    console.log(`  Distance results: ${distance.length} rows`);
+    console.log(`  Passenger results: ${passengers.length} rows`);
+
     console.log('\n' + '='.repeat(60));
     console.log('NYC Taxi analysis completed successfully!');
     console.log('='.repeat(60));
   } finally {
-    connection?.closeSync();
-    instance.closeSync();
+    // Close the database connection pool
+    await db.close();
   }
 }
 

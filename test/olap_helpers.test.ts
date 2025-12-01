@@ -9,10 +9,13 @@ import {
   denseRank,
   drizzle,
   lag,
+  lead,
   median,
   olap,
   percentileCont,
+  rank,
   rowNumber,
+  sumDistinctN,
   sumN,
 } from '../src';
 import type { DuckDBDatabase } from '../src';
@@ -146,4 +149,111 @@ test('olap builder injects any_value for non-aggregated selections', async () =>
   expect(east?.totalQty).toBe(1);
   expect(west?.sampleProduct).toBeDefined();
   expect(east?.sampleProduct).toBeDefined();
+});
+
+test('sumDistinctN deduplicates before summing', async () => {
+  await db.insert(numbers).values([
+    { id: 1, val: 10 },
+    { id: 2, val: 10 },
+    { id: 3, val: 20 },
+    { id: 4, val: 20 },
+    { id: 5, val: 30 },
+  ]);
+
+  const [row] = await db
+    .select({
+      regularSum: sumN(numbers.val),
+      distinctSum: sumDistinctN(numbers.val),
+    })
+    .from(numbers);
+
+  expect(row.regularSum).toBe(90); // 10 + 10 + 20 + 20 + 30
+  expect(row.distinctSum).toBe(60); // 10 + 20 + 30
+});
+
+test('rank vs denseRank differ on ties', async () => {
+  await db.insert(windowed).values([
+    { id: 1, amount: 5 },
+    { id: 2, amount: 10 },
+    { id: 3, amount: 10 },
+    { id: 4, amount: 20 },
+  ]);
+
+  const rows = await db
+    .select({
+      id: windowed.id,
+      r: rank({ orderBy: windowed.amount }),
+      dr: denseRank({ orderBy: windowed.amount }),
+    })
+    .from(windowed)
+    .orderBy(windowed.id);
+
+  // rank skips after ties: [1, 2, 2, 4]
+  // denseRank does not skip: [1, 2, 2, 3]
+  expect(rows.map((r) => r.r)).toEqual([1, 2, 2, 4]);
+  expect(rows.map((r) => r.dr)).toEqual([1, 2, 2, 3]);
+});
+
+test('lead returns next row value', async () => {
+  await db.insert(windowed).values([
+    { id: 1, amount: 100 },
+    { id: 2, amount: 200 },
+    { id: 3, amount: 300 },
+    { id: 4, amount: 400 },
+  ]);
+
+  const rows = await db
+    .select({
+      id: windowed.id,
+      nextAmount: lead<number>(windowed.amount, 1, sql`-1`, {
+        orderBy: windowed.id,
+      }),
+    })
+    .from(windowed)
+    .orderBy(windowed.id);
+
+  expect(rows.map((r) => r.nextAmount)).toEqual([200, 300, 400, -1]);
+});
+
+test('lead with default value for last row', async () => {
+  await db.insert(windowed).values([
+    { id: 1, amount: 10 },
+    { id: 2, amount: 20 },
+  ]);
+
+  const rows = await db
+    .select({
+      id: windowed.id,
+      nextAmount: lead<number>(windowed.amount, 1, sql`999`, {
+        orderBy: windowed.id,
+      }),
+    })
+    .from(windowed)
+    .orderBy(windowed.id);
+
+  expect(rows[1]?.nextAmount).toBe(999);
+});
+
+test('OlapBuilder throws when from() not called', () => {
+  expect(() =>
+    olap(db)
+      .groupBy([numbers.id])
+      .measures({ total: sumN(numbers.val) })
+      .build()
+  ).toThrow('olap: .from() is required');
+});
+
+test('OlapBuilder throws when groupBy() not called', () => {
+  expect(() =>
+    olap(db)
+      .from(numbers)
+      .measures({ total: sumN(numbers.val) })
+      .build()
+  ).toThrow('olap: .groupBy() is required');
+});
+
+test('OlapBuilder throws when measures() not called', () => {
+  expect(() => olap(db).from(numbers).groupBy([numbers.id]).build()).toThrow(
+    'olap: .measures() is required'
+  );
 });

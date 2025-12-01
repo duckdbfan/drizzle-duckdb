@@ -19,16 +19,62 @@ import {
   type QueryTypingsValue,
 } from 'drizzle-orm';
 
+const enum SavepointSupport {
+  Unknown = 0,
+  Yes = 1,
+  No = 2,
+}
+
 export class DuckDBDialect extends PgDialect {
   static readonly [entityKind]: string = 'DuckDBPgDialect';
+  // Track if PG JSON columns were detected during the current query preparation.
+  // Reset before each query via DuckDBSession to keep detection per-query.
   private hasPgJsonColumn = false;
+  // Track savepoint support per-dialect instance to avoid cross-contamination
+  // when multiple database connections with different capabilities exist.
+  private savepointsSupported: SavepointSupport = SavepointSupport.Unknown;
+
+  /**
+   * Reset the PG JSON detection flag. Should be called before preparing a new query.
+   */
+  resetPgJsonFlag(): void {
+    this.hasPgJsonColumn = false;
+  }
+
+  /**
+   * Mark that a PG JSON/JSONB column was detected during query preparation.
+   */
+  markPgJsonDetected(): void {
+    this.hasPgJsonColumn = true;
+  }
 
   assertNoPgJsonColumns(): void {
     if (this.hasPgJsonColumn) {
       throw new Error(
-        'Pg JSON/JSONB columns are not supported in DuckDB. Replace them with duckDbJson() to use DuckDB’s native JSON type.'
+        "Pg JSON/JSONB columns are not supported in DuckDB. Replace them with duckDbJson() to use DuckDB's native JSON type."
       );
     }
+  }
+
+  /**
+   * Check if savepoints are known to be unsupported for this dialect instance.
+   */
+  areSavepointsUnsupported(): boolean {
+    return this.savepointsSupported === SavepointSupport.No;
+  }
+
+  /**
+   * Mark that savepoints are supported for this dialect instance.
+   */
+  markSavepointsSupported(): void {
+    this.savepointsSupported = SavepointSupport.Yes;
+  }
+
+  /**
+   * Mark that savepoints are not supported for this dialect instance.
+   */
+  markSavepointsUnsupported(): void {
+    this.savepointsSupported = SavepointSupport.No;
   }
 
   override async migrate(
@@ -117,8 +163,10 @@ export class DuckDBDialect extends PgDialect {
     encoder: DriverValueEncoder<unknown, unknown>
   ): QueryTypingsValue {
     if (is(encoder, PgJsonb) || is(encoder, PgJson)) {
-      this.hasPgJsonColumn = true;
-      return 'none';
+      this.markPgJsonDetected();
+      throw new Error(
+        "Pg JSON/JSONB columns are not supported in DuckDB. Replace them with duckDbJson() to use DuckDB's native JSON type."
+      );
     } else if (is(encoder, PgNumeric)) {
       return 'decimal';
     } else if (is(encoder, PgTime)) {

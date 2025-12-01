@@ -535,7 +535,7 @@ function emitColumn(
   return builder;
 }
 
-function buildDefault(defaultValue: string | null): string {
+export function buildDefault(defaultValue: string | null): string {
   if (!defaultValue) {
     return '';
   }
@@ -707,6 +707,22 @@ function mapDuckDbType(
     return { builder: `text(${columnName(column.name)}) /* JSON */` };
   }
 
+  if (upper.startsWith('ENUM')) {
+    imports.pgCore.add('text');
+    const enumLiteral = raw.replace(/^ENUM\s*/i, '').trim();
+    return {
+      builder: `text(${columnName(column.name)}) /* ENUM ${enumLiteral} */`,
+    };
+  }
+
+  if (upper.startsWith('UNION')) {
+    imports.pgCore.add('text');
+    const unionLiteral = raw.replace(/^UNION\s*/i, '').trim();
+    return {
+      builder: `text(${columnName(column.name)}) /* UNION ${unionLiteral} */`,
+    };
+  }
+
   if (upper === 'INET') {
     imports.local.add('duckDbInet');
     return { builder: `duckDbInet(${columnName(column.name)})` };
@@ -788,15 +804,16 @@ function mapDuckDbType(
   }
 
   // Fallback: keep as text to avoid runtime failures.
+  // Unknown types are mapped to text with a comment indicating the original type.
   imports.pgCore.add('text');
   return {
     builder: `text(${columnName(
       column.name
-    )}) /* TODO: verify type ${upper} */`,
+    )}) /* unsupported DuckDB type: ${upper} */`,
   };
 }
 
-function parseStructFields(
+export function parseStructFields(
   inner: string
 ): Array<{ name: string; type: string }> {
   const result: Array<{ name: string; type: string }> = [];
@@ -813,7 +830,7 @@ function parseStructFields(
   return result;
 }
 
-function parseMapValue(raw: string): string {
+export function parseMapValue(raw: string): string {
   const inner = raw.replace(/^MAP\(/i, '').replace(/\)$/, '');
   const parts = splitTopLevel(inner, ',');
   if (parts.length < 2) {
@@ -822,7 +839,7 @@ function parseMapValue(raw: string): string {
   return parts[1]?.trim() ?? 'TEXT';
 }
 
-function splitTopLevel(input: string, delimiter: string): string[] {
+export function splitTopLevel(input: string, delimiter: string): string[] {
   const parts: string[] = [];
   let depth = 0;
   let current = '';
@@ -847,7 +864,7 @@ function tableKey(schema: string, table: string): string {
   return `${schema}.${table}`;
 }
 
-function toIdentifier(name: string): string {
+export function toIdentifier(name: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9_]/g, '_');
   const parts = cleaned.split('_').filter(Boolean);
   const base = parts

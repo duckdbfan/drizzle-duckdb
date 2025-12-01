@@ -1,5 +1,8 @@
-import { DuckDBInstance } from '@duckdb/node-api';
-import type { DuckDBConnection } from '@duckdb/node-api';
+/**
+ * Simple NYC Taxi Example - MotherDuck with Connection Pooling
+ *
+ * Demonstrates the simplest way to connect to MotherDuck with automatic pooling.
+ */
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
 import { sql } from 'drizzle-orm';
 import {
@@ -18,15 +21,16 @@ if (!token) {
   process.exit(1);
 }
 
-const instance = await DuckDBInstance.create('md:', {
-  motherduck_token: token,
+// Connect with automatic connection pooling
+const db = await drizzle({
+  connection: {
+    path: 'md:',
+    options: { motherduck_token: token },
+  },
+  pool: 'standard', // 6 connections, optimized for MotherDuck Standard
 });
-let connection: DuckDBConnection | undefined;
 
 try {
-  connection = await instance.connect();
-  const db = drizzle(connection);
-
   await db.execute(sql`
     create or replace temp view taxi_sample as
     select
@@ -83,5 +87,6 @@ try {
     }))
   );
 } finally {
-  connection?.closeSync();
+  // Close the connection pool
+  await db.close();
 }

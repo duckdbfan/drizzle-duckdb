@@ -20,6 +20,9 @@ beforeAll(async () => {
 
   await db.execute(sql`create schema if not exists introspect`);
   await db.execute(sql`create sequence if not exists introspect.items_seq`);
+  await db.execute(
+    sql`create type introspect.item_status as enum ('pending', 'done')`
+  );
 
   await db.execute(sql`
     create table introspect.parents (
@@ -38,6 +41,9 @@ beforeAll(async () => {
       payload struct("name" varchar, "values" integer[]),
       extras map(varchar, integer[]),
       json_col json not null,
+      duration interval,
+      price decimal,
+      status introspect.item_status,
       created_at timestamp with time zone default current_timestamp,
       parent_id integer references introspect.parents(id),
       unique_col text unique,
@@ -66,6 +72,9 @@ test('introspects duckdb catalog and maps duckdb-specific types', async () => {
   expect(schemaTs).toContain(`duckDbMap("extras"`);
   expect(schemaTs).toContain(`duckDbList("tags"`);
   expect(schemaTs).toContain(`duckDbArray("fixed"`);
+  expect(schemaTs).toContain(`duckDbInterval("duration"`);
+  expect(schemaTs).toContain(`numeric("price", { precision: 18, scale: 3 })`);
+  expect(schemaTs).toContain(`/* ENUM ('pending', 'done') */`);
   expect(schemaTs).toContain(`bigint("visits", { mode: 'number' })`);
   expect(schemaTs).toContain(
     `duckDbTimestamp("created_at", { withTimezone: true })`

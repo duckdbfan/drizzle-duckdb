@@ -45,7 +45,7 @@ export interface MapValueWrapper
 }
 
 export interface TimestampValueWrapper
-  extends DuckDBValueWrapper<'timestamp', Date | string> {
+  extends DuckDBValueWrapper<'timestamp', Date | string | number | bigint> {
   readonly withTimezone: boolean;
   readonly precision?: number;
 }
@@ -126,7 +126,7 @@ export function wrapMap(
 }
 
 export function wrapTimestamp(
-  data: Date | string,
+  data: Date | string | number | bigint,
   withTimezone: boolean,
   precision?: number
 ): TimestampValueWrapper {

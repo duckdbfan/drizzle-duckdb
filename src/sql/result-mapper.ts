@@ -32,7 +32,7 @@ function toDecoderInput<TDecoder extends DriverValueDecoder<unknown, unknown>>(
   return value as DecoderInput<TDecoder>;
 }
 
-function normalizeInet(value: unknown): unknown {
+export function normalizeInet(value: unknown): unknown {
   if (
     value &&
     typeof value === 'object' &&
@@ -70,7 +70,7 @@ function normalizeInet(value: unknown): unknown {
   return value;
 }
 
-function normalizeTimestampString(
+export function normalizeTimestampString(
   value: unknown,
   withTimezone: boolean
 ): string | unknown {
@@ -88,7 +88,7 @@ function normalizeTimestampString(
   return value;
 }
 
-function normalizeTimestamp(
+export function normalizeTimestamp(
   value: unknown,
   withTimezone: boolean
 ): Date | unknown {
@@ -105,7 +105,7 @@ function normalizeTimestamp(
   return value;
 }
 
-function normalizeDateString(value: unknown): string | unknown {
+export function normalizeDateString(value: unknown): string | unknown {
   if (value instanceof Date) {
     return value.toISOString().slice(0, 10);
   }
@@ -115,7 +115,7 @@ function normalizeDateString(value: unknown): string | unknown {
   return value;
 }
 
-function normalizeDateValue(value: unknown): Date | unknown {
+export function normalizeDateValue(value: unknown): Date | unknown {
   if (value instanceof Date) {
     return value;
   }
@@ -125,7 +125,7 @@ function normalizeDateValue(value: unknown): Date | unknown {
   return value;
 }
 
-function normalizeTime(value: unknown): string | unknown {
+export function normalizeTime(value: unknown): string | unknown {
   if (typeof value === 'bigint') {
     const totalMillis = Number(value) / 1000;
     const date = new Date(totalMillis);
@@ -137,7 +137,7 @@ function normalizeTime(value: unknown): string | unknown {
   return value;
 }
 
-function normalizeInterval(value: unknown): string | unknown {
+export function normalizeInterval(value: unknown): string | unknown {
   if (
     value &&
     typeof value === 'object' &&
