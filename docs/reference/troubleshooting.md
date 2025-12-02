@@ -37,7 +37,7 @@ const table = pgTable('t', { data: duckDbJson('data') });
 
 **Cause**: DuckDB uses different functions for array operations.
 
-**Solution**: Either enable `rewriteArrays` (default) or use explicit helpers:
+**Solution**: Array operators are automatically rewritten via AST transformation. For clarity, you can also use explicit helpers:
 
 ```typescript
 import { duckDbArrayContains } from '@leonardovida-md/drizzle-neo-duckdb';

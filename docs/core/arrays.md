@@ -121,7 +121,7 @@ SELECT * FROM users WHERE array_has_any(tags, ['vip', 'beta-tester', 'early-adop
 
 ## Automatic Operator Rewriting
 
-By default, Drizzle DuckDB rewrites Postgres array operators:
+Drizzle DuckDB automatically rewrites Postgres array operators using AST transformation:
 
 | Postgres | DuckDB Equivalent               |
 | -------- | ------------------------------- |
@@ -129,7 +129,7 @@ By default, Drizzle DuckDB rewrites Postgres array operators:
 | `<@`     | `array_has_all(values, column)` |
 | `&&`     | `array_has_any(column, values)` |
 
-This means Postgres-style code still works:
+This means Postgres-style code works seamlessly:
 
 ```typescript
 import { arrayContains } from 'drizzle-orm/pg-core';
@@ -139,14 +139,6 @@ const results = await db
   .select()
   .from(users)
   .where(arrayContains(users.tags, ['admin']));
-```
-
-To disable automatic rewriting:
-
-```typescript
-const db = drizzle(connection, {
-  rewriteArrays: false,
-});
 ```
 
 ## Combining Array Conditions

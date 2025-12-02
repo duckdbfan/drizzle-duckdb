@@ -37,16 +37,12 @@ import {
 } from './pool.ts';
 import {
   resolvePrepareCacheOption,
-  resolveRewriteArraysOption,
   type PreparedStatementCacheConfig,
   type PrepareCacheOption,
-  type RewriteArraysMode,
-  type RewriteArraysOption,
 } from './options.ts';
 
 export interface PgDriverOptions {
   logger?: Logger;
-  rewriteArrays?: RewriteArraysMode;
   rejectStringArrayLiterals?: boolean;
   prepareCache?: PreparedStatementCacheConfig;
 }
@@ -65,7 +61,6 @@ export class DuckDBDriver {
   ): DuckDBSession<Record<string, unknown>, TablesRelationalConfig> {
     return new DuckDBSession(this.client, this.dialect, schema, {
       logger: this.options.logger,
-      rewriteArrays: this.options.rewriteArrays ?? 'auto',
       rejectStringArrayLiterals: this.options.rejectStringArrayLiterals,
       prepareCache: this.options.prepareCache,
     });
@@ -83,7 +78,6 @@ export interface DuckDBConnectionConfig {
 export interface DuckDBDrizzleConfig<
   TSchema extends Record<string, unknown> = Record<string, never>,
 > extends DrizzleConfig<TSchema> {
-  rewriteArrays?: RewriteArraysOption;
   rejectStringArrayLiterals?: boolean;
   prepareCache?: PrepareCacheOption;
   /** Pool configuration. Use preset name, size config, or false to disable. */
@@ -126,7 +120,6 @@ function createFromClient<
   instance?: DuckDBInstance
 ): DuckDBDatabase<TSchema, ExtractTablesWithRelations<TSchema>> {
   const dialect = new DuckDBDialect();
-  const rewriteArraysMode = resolveRewriteArraysOption(config.rewriteArrays);
   const prepareCache = resolvePrepareCacheOption(config.prepareCache);
 
   const logger =
@@ -148,7 +141,6 @@ function createFromClient<
 
   const driver = new DuckDBDriver(client, dialect, {
     logger,
-    rewriteArrays: rewriteArraysMode,
     rejectStringArrayLiterals: config.rejectStringArrayLiterals,
     prepareCache,
   });

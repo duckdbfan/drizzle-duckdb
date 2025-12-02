@@ -15,9 +15,13 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   sql,
+  SQL,
   type DriverValueEncoder,
   type QueryTypingsValue,
 } from 'drizzle-orm';
+import type { QueryWithTypings } from 'drizzle-orm/sql/sql';
+
+import { transformSQL } from './sql/ast-transformer.ts';
 
 const enum SavepointSupport {
   Unknown = 0,
@@ -180,5 +184,21 @@ export class DuckDBDialect extends PgDialect {
     } else {
       return 'none';
     }
+  }
+
+  override sqlToQuery(
+    sqlObj: SQL,
+    invokeSource?: 'indexes' | undefined
+  ): QueryWithTypings {
+    // First, let the parent generate the SQL string
+    const result = super.sqlToQuery(sqlObj, invokeSource);
+
+    // Apply AST-based transformations for DuckDB compatibility
+    const transformed = transformSQL(result.sql);
+
+    return {
+      ...result,
+      sql: transformed.sql,
+    };
   }
 }

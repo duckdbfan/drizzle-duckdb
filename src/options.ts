@@ -1,18 +1,3 @@
-export type RewriteArraysMode = 'auto' | 'always' | 'never';
-
-export type RewriteArraysOption = boolean | RewriteArraysMode;
-
-const DEFAULT_REWRITE_ARRAYS_MODE: RewriteArraysMode = 'auto';
-
-export function resolveRewriteArraysOption(
-  value?: RewriteArraysOption
-): RewriteArraysMode {
-  if (value === undefined) return DEFAULT_REWRITE_ARRAYS_MODE;
-  if (value === true) return 'auto';
-  if (value === false) return 'never';
-  return value;
-}
-
 export type PrepareCacheOption = boolean | number | { size?: number };
 
 export interface PreparedStatementCacheConfig {

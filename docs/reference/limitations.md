@@ -163,23 +163,24 @@ duckDbTimestamp('col', { mode: 'string' });
 // Returns: '2024-01-15 10:30:00+00'
 ```
 
-## Query Rewriting
+## Query Transformation
 
-This driver automatically rewrites certain SQL patterns to ensure compatibility with DuckDB. All rewriting happens transparently before query execution.
+This driver automatically transforms certain SQL patterns to ensure compatibility with DuckDB. All transformation happens transparently at the dialect level when SQL is generated.
 
 ### How It Works
 
-Before executing any query, the driver applies a lightweight SQL transformation pass that:
+The driver uses an AST-based (Abstract Syntax Tree) SQL transformer that:
 
 1. **Preserves correctness** - Only modifies patterns that would fail or behave incorrectly in DuckDB
-2. **Maintains performance** - Adds minimal overhead (~2-15 microseconds per query)
-3. **Skips when unnecessary** - Queries without relevant patterns bypass rewriting entirely
+2. **Maintains performance** - Parses SQL only when transformation patterns are detected
+3. **Handles edge cases** - Proper AST parsing handles complex queries with CTEs, subqueries, etc.
+4. **Falls back gracefully** - If the parser fails, the original SQL is used
 
-The rewriter is string-based and handles comments, string literals, and quoted identifiers correctly to avoid false positives.
+Transformation is applied automatically in `DuckDBDialect.sqlToQuery()` for all queries.
 
 ### Array Operators
 
-Postgres array operators are rewritten to DuckDB functions:
+Postgres array operators are transformed to DuckDB functions:
 
 | Postgres               | DuckDB Equivalent              |
 | ---------------------- | ------------------------------ |
@@ -187,17 +188,20 @@ Postgres array operators are rewritten to DuckDB functions:
 | `column <@ ARRAY[...]` | `array_has_all([...], column)` |
 | `column && ARRAY[...]` | `array_has_any(column, [...])` |
 
-This happens automatically with `rewriteArrays: true` (default).
+This transformation happens automatically for all queries.
 
-**Recommendation:** Use the explicit helpers for clarity:
+**Recommendation:** Use the explicit DuckDB-native helpers for clarity:
 
 ```typescript
-import { duckDbArrayContains } from '@leonardovida-md/drizzle-neo-duckdb';
+import { arrayHasAll, arrayHasAny, duckDbArrayContains } from '@leonardovida-md/drizzle-neo-duckdb';
 
-// Explicit and clear
+// DuckDB-native (recommended)
+.where(arrayHasAll(products.tags, ['a', 'b']))
+
+// Legacy helper (still works)
 .where(duckDbArrayContains(products.tags, ['a', 'b']))
 
-// Also works (auto-rewritten), but less clear
+// Postgres operator (auto-transformed)
 .where(arrayContains(products.tags, ['a', 'b']))
 ```
 

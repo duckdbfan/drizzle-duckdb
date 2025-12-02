@@ -3,7 +3,7 @@
   "module": "./dist/index.mjs",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "description": "A drizzle ORM client for use with DuckDB. Based on drizzle's Postgres client.",
   "type": "module",
   "scripts": {
@@ -79,6 +79,7 @@
     "dist/**/*.d.ts"
   ],
   "dependencies": {
-    "@duckdb/node-bindings-darwin-arm64": "^1.4.2-r.1"
+    "@duckdb/node-bindings-darwin-arm64": "^1.4.2-r.1",
+    "node-sql-parser": "^5.3.13"
   }
 }

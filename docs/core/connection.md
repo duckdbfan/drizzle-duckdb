@@ -261,13 +261,12 @@ const db = await drizzle(':memory:', {
   // Pool configuration (size/preset; use createDuckDBConnectionPool for timeouts)
   pool: { size: 8 },
 
-  // Rewrite Postgres array operators to DuckDB (default: true)
-  rewriteArrays: true,
-
   // Throw on Postgres-style array literals (default: false)
   rejectStringArrayLiterals: false,
 });
 ```
+
+Note: Postgres array operators (`@>`, `<@`, `&&`) are automatically rewritten to DuckDB functions via AST transformation.
 
 See [Configuration](/reference/configuration) for all options.
 

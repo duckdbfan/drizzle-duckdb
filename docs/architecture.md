@@ -19,7 +19,7 @@
 ## DuckDB Types, Helpers, and Rewriting
 
 - `src/columns.ts`: DuckDB-specific column helpers (`duckDbList/Array/Map/Struct/Json/Blob/Timestamp` etc.), literal builders, array helper predicates (`duckDbArrayContains/Contained/Overlaps`). Timestamp binding defaults to parameter binding on Node with literal fallback for Bun or explicit override.
-- `src/sql/query-rewriters.ts`: `adaptArrayOperators()` rewrites `@>`, `<@`, `&&` to DuckDB `array_has_*` functions with a fast-path guard and comment/string scrubbing.
+- `src/sql/ast-transformer.ts`: AST-based SQL transformer using `node-sql-parser`. Rewrites Postgres array operators (`@>`, `<@`, `&&`) to DuckDB `array_has_*` functions, and qualifies ambiguous column references in JOINs. Visitors in `src/sql/visitors/` handle specific transformations.
 - `src/sql/result-mapper.ts`: normalizes inet/time/timestamp/date/interval and maps nested selection objects with nullable join nullification.
 
 ## Introspection and CLI

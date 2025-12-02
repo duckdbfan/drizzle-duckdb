@@ -31,7 +31,7 @@ The package exports from `src/index.ts` which re-exports:
 
 1. **Built on Postgres Driver**: Extends `PgDialect`, `PgSession`, `PgDatabase` from `drizzle-orm/pg-core` since DuckDB's SQL is largely Postgres-compatible
 
-2. **Array Operator Rewriting**: By default (`rewriteArrays: true`), Postgres array operators (`@>`, `<@`, `&&`) are rewritten to DuckDB's `array_has_*` functions in `src/sql/query-rewriters.ts`
+2. **Array Operator Rewriting**: Postgres array operators (`@>`, `<@`, `&&`) are automatically rewritten to DuckDB's `array_has_*` functions via AST transformation in `src/sql/ast-transformer.ts`
 
 3. **Custom Column Types**: DuckDB-specific types (STRUCT, MAP, LIST, JSON) use custom type builders in `columns.ts` that handle serialization to DuckDB literal syntax
 

@@ -45,9 +45,6 @@ interface DuckDBDrizzleConfig<TSchema> {
   // Schema for relational queries
   schema?: TSchema;
 
-  // Rewrite Postgres array operators to DuckDB functions (default: 'auto')
-  rewriteArrays?: 'auto' | 'always' | 'never' | boolean;
-
   // Enable a per-connection prepared statement cache (default: disabled)
   prepareCache?: boolean | number | { size?: number };
 
@@ -55,6 +52,8 @@ interface DuckDBDrizzleConfig<TSchema> {
   rejectStringArrayLiterals?: boolean;
 }
 ```
+
+Note: Postgres array operators (`@>`, `<@`, `&&`) are automatically rewritten to DuckDB functions via AST transformation.
 
 ## Return Value
 
@@ -112,19 +111,16 @@ const usersWithPosts = await db.query.users.findMany({
 });
 ```
 
-### Array Operator Configuration
+### Strict Array Literal Handling
 
 ```typescript
-// Disable automatic array operator rewriting
-const db = drizzle(connection, {
-  rewriteArrays: false,
-});
-
-// Throw an error on Postgres-style array literals
+// Throw an error on Postgres-style array literals like '{1,2,3}'
 const db = drizzle(connection, {
   rejectStringArrayLiterals: true,
 });
 ```
+
+Note: Postgres array operators (`@>`, `<@`, `&&`) are automatically transformed to DuckDB's `array_has_*` functions via AST parsing.
 
 ## Connection Types
 

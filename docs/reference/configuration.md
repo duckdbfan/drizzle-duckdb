@@ -17,7 +17,6 @@ The `drizzle()` function accepts a configuration object:
 const db = drizzle(connection, {
   logger: true,
   schema: mySchema,
-  rewriteArrays: true,
   rejectStringArrayLiterals: false,
   pool: { size: 6 },
 });
@@ -100,15 +99,9 @@ const usersWithPosts = await db.query.users.findMany({
 });
 ```
 
-### rewriteArrays
+### Array Operator Rewriting
 
-Automatically rewrite Postgres array operators to DuckDB functions.
-
-| Type                                                | Default  | Description                                                                           |
-| --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
-| string (`'auto'`, `'always'`, `'never'`) or boolean | `'auto'` | Control array operator rewriting. `true` maps to `'auto'`; `false` maps to `'never'`. |
-
-**Behavior when enabled**:
+Postgres array operators are automatically rewritten to DuckDB functions via AST transformation. This is always enabled and cannot be disabled.
 
 | Postgres Operator   | Rewritten To                 |
 | ------------------- | ---------------------------- |
@@ -116,25 +109,18 @@ Automatically rewrite Postgres array operators to DuckDB functions.
 | `<@` (contained by) | `array_has_all(right, left)` |
 | `&&` (overlaps)     | `array_has_any(left, right)` |
 
-**Usage**:
+**Example**:
 
 ```typescript
-// Default: rewriting enabled on demand
-const db = drizzle(connection, { rewriteArrays: 'auto' });
-
 // Postgres-style code works automatically
 const results = await db
   .select()
   .from(products)
   .where(arrayContains(products.tags, ['sale']));
-// Generated: WHERE array_has_all(tags, ['sale'])
-
-// Force rewrite pass even if operators are rare
-const db = drizzle(connection, { rewriteArrays: 'always' });
-
-// Disable rewriting (use DuckDB syntax directly)
-const db = drizzle(connection, { rewriteArrays: 'never' });
+// Generated: WHERE array_has_all(tags, ARRAY['sale'])
 ```
+
+Note: The AST parser uses PostgreSQL syntax, so use `ARRAY[...]` notation rather than DuckDB's native `[...]` syntax when using Postgres array operators.
 
 ### prepareCache
 

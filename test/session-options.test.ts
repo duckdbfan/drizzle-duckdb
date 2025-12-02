@@ -1,27 +1,13 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import { sql } from 'drizzle-orm';
-import { pgTable, integer } from 'drizzle-orm/pg-core';
-import {
-  describe,
-  expect,
-  test,
-  beforeAll,
-  afterAll,
-  beforeEach,
-} from 'vitest';
+import { describe, expect, test, beforeAll, afterAll } from 'vitest';
 import { drizzle } from '../src/driver.ts';
 import type { DuckDBDatabase } from '../src/driver.ts';
-import { duckDbList } from '../src/columns.ts';
 
 describe('Session Options Tests', () => {
-  describe('rewriteArrays option', () => {
+  describe('array operator AST transformation', () => {
     let instance: DuckDBInstance;
     let db: DuckDBDatabase;
-
-    const arrayTable = pgTable('array_test', {
-      id: integer('id').primaryKey(),
-      tags: duckDbList<number>('tags', 'INTEGER'),
-    });
 
     beforeAll(async () => {
       instance = await DuckDBInstance.create(':memory:');
@@ -31,23 +17,23 @@ describe('Session Options Tests', () => {
       instance.closeSync?.();
     });
 
-    test('rewriteArrays: true (default) rewrites @> operators', async () => {
+    test('Postgres-style @> operators are automatically rewritten to array_has_all', async () => {
       const connection = await instance.connect();
-      db = drizzle(connection, { rewriteArrays: true });
+      db = drizzle(connection);
 
       await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS array_rewrite_true (
+        CREATE TABLE IF NOT EXISTS array_transform_test (
           id INTEGER PRIMARY KEY,
           tags INTEGER[]
         )
       `);
       await db.execute(
-        sql`INSERT INTO array_rewrite_true VALUES (1, [1, 2, 3])`
+        sql`INSERT INTO array_transform_test VALUES (1, [1, 2, 3])`
       );
 
-      // With rewriting enabled, @> becomes array_has_all which works
+      // AST transformation rewrites @> ARRAY[...] to array_has_all(...)
       const result = await db.execute<{ id: number }>(sql`
-        SELECT id FROM array_rewrite_true WHERE tags @> [1, 2]
+        SELECT id FROM array_transform_test WHERE tags @> ARRAY[1, 2]
       `);
 
       expect(result.length).toBe(1);
@@ -56,28 +42,29 @@ describe('Session Options Tests', () => {
       await db.close();
     });
 
-    test('rewriteArrays: false does not rewrite @> operators', async () => {
+    test('DuckDB-native array syntax with @> fails gracefully (parser limitation)', async () => {
       const connection = await instance.connect();
-      db = drizzle(connection, { rewriteArrays: false });
+      db = drizzle(connection);
 
       await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS array_rewrite_false (
+        CREATE TABLE IF NOT EXISTS array_native_test (
           id INTEGER PRIMARY KEY,
           tags INTEGER[]
         )
       `);
       await db.execute(
-        sql`INSERT INTO array_rewrite_false VALUES (1, [1, 2, 3])`
+        sql`INSERT INTO array_native_test VALUES (1, [1, 2, 3])`
       );
 
-      // Without rewriting, @> should fail because DuckDB doesn't support it natively
+      // DuckDB-native [1, 2] syntax can't be parsed by the Postgres AST parser,
+      // so the query passes through unchanged and DuckDB fails on @>
       try {
         await db.execute(
-          sql`SELECT id FROM array_rewrite_false WHERE tags @> [1, 2]`
+          sql`SELECT id FROM array_native_test WHERE tags @> [1, 2]`
         );
         expect.fail('Should have thrown');
       } catch (e) {
-        // Expected to fail - DuckDB doesn't support @> natively
+        // Expected - DuckDB doesn't support @> natively and parser couldn't transform
         expect(e).toBeDefined();
       }
 

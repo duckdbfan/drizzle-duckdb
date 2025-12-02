@@ -155,22 +155,14 @@ const results = await db
   .where(arrayContains(products.tags, ['sale']));
 
 // ...is automatically rewritten to:
-// WHERE array_has_all(tags, ['sale'])
-```
-
-To disable this behavior:
-
-```typescript
-const db = drizzle(connection, {
-  rewriteArrays: false, // Disable automatic rewriting
-});
+// WHERE array_has_all(tags, ARRAY['sale'])
 ```
 
 {: .highlight }
 
 > **Recommendation**
 >
-> Use the explicit `duckDbArray*` helpers for clarity. They make it obvious that you're using DuckDB-specific functions.
+> Use the explicit `duckDbArray*` helpers for clarity. They make it obvious that you're using DuckDB-specific functions and avoid AST parser limitations with DuckDB-native `[...]` array syntax.
 
 ## Complete Example
 

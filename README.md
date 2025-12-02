@@ -280,9 +280,6 @@ const db = drizzle(connection, {
   // Pool size/preset when using connection strings (default: 4). Set false to disable.
   pool: { size: 8 },
 
-  // Rewrite Postgres array operators to DuckDB functions (default: true)
-  rewriteArrays: true,
-
   // Throw on Postgres-style array literals like '{1,2,3}' (default: false)
   rejectStringArrayLiterals: false,
 
@@ -290,6 +287,8 @@ const db = drizzle(connection, {
   schema: mySchema,
 });
 ```
+
+Postgres array operators (`@>`, `<@`, `&&`) are automatically rewritten to DuckDB's `array_has_*` functions via AST transformation.
 
 ## Known Limitations
 

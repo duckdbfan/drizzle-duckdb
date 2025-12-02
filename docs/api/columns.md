@@ -414,7 +414,7 @@ Maps to DuckDB's `array_has_any(column, values)`.
 
 ## Automatic Array Operator Rewriting
 
-By default, the driver rewrites Postgres array operators to DuckDB equivalents:
+The driver automatically rewrites Postgres array operators to DuckDB equivalents via AST transformation:
 
 | Postgres | DuckDB                       |
 | -------- | ---------------------------- |
@@ -422,12 +422,4 @@ By default, the driver rewrites Postgres array operators to DuckDB equivalents:
 | `<@`     | `array_has_all(right, left)` |
 | `&&`     | `array_has_any(left, right)` |
 
-This is controlled by the `rewriteArrays` option (default: `true`):
-
-```typescript
-const db = drizzle(connection, {
-  rewriteArrays: true, // Enable automatic rewriting (default)
-});
-```
-
-If you use Postgres array operators with `rewriteArrays: true`, they'll be automatically converted. However, using the explicit helpers (`duckDbArrayContains`, etc.) is recommended for clarity.
+Postgres array operators are automatically converted when using `ARRAY[...]` syntax. Using the explicit helpers (`duckDbArrayContains`, etc.) is recommended for clarity and to avoid parser limitations with DuckDB-native `[...]` syntax.
