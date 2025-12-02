@@ -15,9 +15,9 @@ This page documents known differences between Drizzle DuckDB and Drizzle's stand
 | -------------------- | ------- | -------------------------------------------------------------------------- |
 | Select queries       | Full    | All standard select operations work                                        |
 | Insert/Update/Delete | Full    | Including `.returning()`                                                   |
-| Joins                | Full    | All join types supported                                                   |
+| Joins                | Full    | All join types supported; same-name columns auto-qualified                 |
 | Subqueries           | Full    |                                                                            |
-| CTEs (WITH clauses)  | Full    |                                                                            |
+| CTEs (WITH clauses)  | Full    | Join column ambiguity auto-resolved                                        |
 | Aggregations         | Full    |                                                                            |
 | Transactions         | Partial | No savepoints (driver probes once, then falls back)                        |
 | Concurrent queries   | Partial | One query per connection; use pooling for parallelism                      |
@@ -285,6 +285,120 @@ The following column types **do** use native DuckDB value bindings for improved 
 
 When running under Bun, certain DuckDB native bindings behave differently than under Node.js. The driver handles these differences automatically by falling back to SQL literals where needed. All tests pass under both Bun and Node.js.
 
+## CTE Join Column Qualification
+
+### Automatic Ambiguous Column Resolution
+
+When joining CTEs with `eq()` using the same column name on both sides, drizzle-orm generates unqualified column references that cause DuckDB's "Ambiguous reference" error:
+
+```typescript
+// This would fail without automatic rewriting
+const cte1 = db
+  .$with('cte1')
+  .as(db.select({ country: sql`'US'`.as('country') }).from(sql`...`));
+const cte2 = db
+  .$with('cte2')
+  .as(db.select({ country: sql`'US'`.as('country') }).from(sql`...`));
+
+await db
+  .with(cte1, cte2)
+  .select()
+  .from(cte1)
+  .leftJoin(cte2, eq(cte1.country, cte2.country));
+// Generated: ON "country" = "country"  -- Ambiguous!
+```
+
+The driver automatically rewrites these to qualified references:
+
+```sql
+-- Before: ON "country" = "country"
+-- After:  ON "cte1"."country" = "cte2"."country"
+```
+
+This rewriting only occurs when:
+
+- Both sides of the equality are columns with the **same name**
+- The columns are not already qualified
+
+### Known Limitations
+
+The column qualification rewriter has some edge cases it cannot handle:
+
+| Limitation         | Description                                                          |
+| ------------------ | -------------------------------------------------------------------- |
+| Nested CTE joins   | Joins inside CTE definitions may also be processed                   |
+| Subqueries in FROM | `FROM (SELECT ...) AS alias` is not parsed as a table source         |
+| Escaped quotes     | Column names with `""` escapes (e.g., `"col""name"`) are not handled |
+
+**These limitations rarely occur in practice** since:
+
+- CTEs typically don't contain joins with same-name columns internally
+- Subqueries in FROM are less common than table references
+- Escaped quotes in identifiers are extremely rare
+
+### Performance
+
+The rewriter adds minimal overhead (~2-15 microseconds per query depending on complexity). Queries without `JOIN` bypass the rewriter entirely.
+
+### Alternative: Native DuckDB Syntax
+
+If you encounter edge cases or prefer explicit control, you can bypass the rewriter by using raw SQL for the join condition:
+
+```typescript
+import { sql } from 'drizzle-orm';
+
+const cte1 = db
+  .$with('cte1')
+  .as(
+    db
+      .select({ country: sql`'US'`.as('country'), value: sql`100`.as('value') })
+      .from(sql`(SELECT 1) AS t`)
+  );
+
+const cte2 = db
+  .$with('cte2')
+  .as(
+    db
+      .select({ country: sql`'US'`.as('country'), count: sql`50`.as('count') })
+      .from(sql`(SELECT 1) AS t`)
+  );
+
+// Option 1: Use raw SQL for the ON clause with explicit qualification
+await db
+  .with(cte1, cte2)
+  .select({ country: cte1.country, value: cte1.value, count: cte2.count })
+  .from(cte1)
+  .leftJoin(cte2, sql`"cte1"."country" = "cte2"."country"`);
+
+// Option 2: Use different column names to avoid ambiguity entirely
+const cte1Alt = db.$with('cte1').as(
+  db
+    .select({
+      cte1_country: sql`'US'`.as('cte1_country'),
+      value: sql`100`.as('value'),
+    })
+    .from(sql`(SELECT 1) AS t`)
+);
+
+const cte2Alt = db.$with('cte2').as(
+  db
+    .select({
+      cte2_country: sql`'US'`.as('cte2_country'),
+      count: sql`50`.as('count'),
+    })
+    .from(sql`(SELECT 1) AS t`)
+);
+
+await db
+  .with(cte1Alt, cte2Alt)
+  .select()
+  .from(cte1Alt)
+  .leftJoin(cte2Alt, eq(cte1Alt.cte1_country, cte2Alt.cte2_country));
+// No rewriting needed - column names are different
+```
+
+Using different column names is often the cleanest approach as it makes the intent explicit and works without any rewriting.
+
 ## Workarounds Summary
 
 | Limitation               | Workaround                                              |
@@ -294,3 +408,4 @@ When running under Bun, certain DuckDB native bindings behave differently than u
 | No cursor streaming      | Use `executeBatches()` / `executeArrow()` or pagination |
 | String array warnings    | Use native arrays or DuckDB helpers                     |
 | Default schema is `main` | Explicitly use `pgSchema('main')` if needed             |
+| CTE join ambiguity       | Automatic (or use different column names)               |

@@ -2683,6 +2683,40 @@ test('join on aliased sql from with clause', async () => {
   ]);
 });
 
+test('CTE join with direct eq() produces qualified columns in ON clause', async () => {
+  const { db } = ctx;
+
+  const cte1 = db.$with('cte1').as(
+    db
+      .select({
+        id: sql<number>`1`.as('id'),
+        value: sql<number>`100`.as('value'),
+      })
+      .from(sql`(select 1) as t`)
+  );
+
+  const cte2 = db.$with('cte2').as(
+    db
+      .select({
+        cte1_id: sql<number>`1`.as('cte1_id'),
+        count: sql<number>`50`.as('count'),
+      })
+      .from(sql`(select 1) as t`)
+  );
+
+  const result = await db
+    .with(cte1, cte2)
+    .select({
+      id: cte1.id,
+      value: cte1.value,
+      count: cte2.count,
+    })
+    .from(cte1)
+    .leftJoin(cte2, eq(cte1.id, cte2.cte1_id));
+
+  assert.deepEqual(result, [{ id: 1, value: 100, count: 50 }]);
+});
+
 test('prefixed table', async () => {
   const { db } = ctx;
 

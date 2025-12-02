@@ -15,7 +15,10 @@ import type {
 } from 'drizzle-orm/relations';
 import { fillPlaceholders, type Query, SQL, sql } from 'drizzle-orm/sql/sql';
 import type { Assume } from 'drizzle-orm/utils';
-import { adaptArrayOperators } from './sql/query-rewriters.ts';
+import {
+  adaptArrayOperators,
+  qualifyJoinColumns,
+} from './sql/query-rewriters.ts';
 import { mapResultRow } from './sql/result-mapper.ts';
 import { TransactionRollbackError } from 'drizzle-orm/errors';
 import type { DuckDBDialect } from './dialect.ts';
@@ -61,8 +64,24 @@ function rewriteQuery(
     return { sql: query, rewritten: false };
   }
 
-  const rewritten = adaptArrayOperators(query);
-  return { sql: rewritten, rewritten: rewritten !== query };
+  let result = query;
+  let wasRewritten = false;
+
+  // Rewrite Postgres array operators to DuckDB functions
+  const arrayRewritten = adaptArrayOperators(result);
+  if (arrayRewritten !== result) {
+    result = arrayRewritten;
+    wasRewritten = true;
+  }
+
+  // Qualify unqualified column references in JOIN ON clauses
+  const joinQualified = qualifyJoinColumns(result);
+  if (joinQualified !== result) {
+    result = joinQualified;
+    wasRewritten = true;
+  }
+
+  return { sql: result, rewritten: wasRewritten };
 }
 
 export class DuckDBPreparedQuery<
