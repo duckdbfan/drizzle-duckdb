@@ -322,7 +322,7 @@ describe('qualifyJoinColumns', () => {
 
   test('handles complex real-world CTE query', () => {
     const input = `with "brandsAndOutletsCounts" as (select "country" from "restaurants"), "topCities" as (select "country" from "cities") select "country" from "brandsAndOutletsCounts" left join "topCities" on "country" = "country"`;
-    const expected = `with "brandsAndOutletsCounts" as (select "country" from "restaurants"), "topCities" as (select "country" from "cities") select "country" from "brandsAndOutletsCounts" left join "topCities" on "brandsAndOutletsCounts"."country" = "topCities"."country"`;
+    const expected = `with "brandsAndOutletsCounts" as (select "country" from "restaurants"), "topCities" as (select "country" from "cities") select "brandsAndOutletsCounts"."country" from "brandsAndOutletsCounts" left join "topCities" on "brandsAndOutletsCounts"."country" = "topCities"."country"`;
     expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
@@ -367,13 +367,120 @@ describe('qualifyJoinColumns', () => {
     expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
-  test.skip('handles nested CTEs with joins inside CTE', () => {
-    // KNOWN LIMITATION: Joins inside CTEs may also be processed
-    // This is a complex case that would require full SQL parsing to handle correctly
+  test('handles nested CTEs with joins inside CTE', () => {
+    // Joins inside CTE definitions are now correctly skipped
     const input =
       'with "cte" as (select * from "x" left join "y" on "id" = "id") select * from "cte" left join "other" on "key" = "key"';
     const expected =
       'with "cte" as (select * from "x" left join "y" on "id" = "id") select * from "cte" left join "other" on "cte"."key" = "other"."key"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles 3 CTEs where one CTE references another', () => {
+    const input =
+      'with "brandsAndOutletsCounts" as (select "country" from "restaurants" group by "country"), "cities" as (select "country", "city" from "neighbourhoods" group by "country", "city"), "topCities" as (select "country" from "cities" group by "country") select "country" from "brandsAndOutletsCounts" left join "topCities" on "country" = "country"';
+    const expected =
+      'with "brandsAndOutletsCounts" as (select "country" from "restaurants" group by "country"), "cities" as (select "country", "city" from "neighbourhoods" group by "country", "city"), "topCities" as (select "country" from "cities" group by "country") select "brandsAndOutletsCounts"."country" from "brandsAndOutletsCounts" left join "topCities" on "brandsAndOutletsCounts"."country" = "topCities"."country"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles CTE with multiple internal joins - only qualifies main query', () => {
+    // CTE has two internal joins, main query has one join - only main query should be qualified
+    const input =
+      'with "cte" as (select * from "x" left join "y" on "id" = "id" inner join "z" on "key" = "key") select * from "cte" left join "other" on "name" = "name"';
+    const expected =
+      'with "cte" as (select * from "x" left join "y" on "id" = "id" inner join "z" on "key" = "key") select * from "cte" left join "other" on "cte"."name" = "other"."name"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles 4 CTEs with chain of dependencies', () => {
+    // cte1 -> cte2 -> cte3 -> cte4, main query joins cte1 and cte4
+    const input =
+      'with "cte1" as (select "id" from "base"), "cte2" as (select "id" from "cte1"), "cte3" as (select "id" from "cte2"), "cte4" as (select "id" from "cte3") select * from "cte1" inner join "cte4" on "id" = "id"';
+    const expected =
+      'with "cte1" as (select "id" from "base"), "cte2" as (select "id" from "cte1"), "cte3" as (select "id" from "cte2"), "cte4" as (select "id" from "cte3") select * from "cte1" inner join "cte4" on "cte1"."id" = "cte4"."id"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles main query with 3 joins after CTEs', () => {
+    const input =
+      'with "cte" as (select "x" from "t") select * from "a" left join "b" on "id" = "id" inner join "c" on "key" = "key" right join "d" on "name" = "name"';
+    const expected =
+      'with "cte" as (select "x" from "t") select * from "a" left join "b" on "a"."id" = "b"."id" inner join "c" on "b"."key" = "c"."key" right join "d" on "c"."name" = "d"."name"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles subquery in FROM with CTE in main query', () => {
+    const input =
+      'with "cte" as (select "country" from "regions") select * from (select * from "orders") as "sub" left join "cte" on "country" = "country"';
+    const expected =
+      'with "cte" as (select "country" from "regions") select * from (select * from "orders") as "sub" left join "cte" on "sub"."country" = "cte"."country"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles CTE with subquery inside its definition', () => {
+    const input =
+      'with "cte" as (select * from (select "id" from "inner") as "sub" left join "other" on "id" = "id") select * from "cte" left join "final" on "key" = "key"';
+    const expected =
+      'with "cte" as (select * from (select "id" from "inner") as "sub" left join "other" on "id" = "id") select * from "cte" left join "final" on "cte"."key" = "final"."key"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles recursive-style CTE pattern', () => {
+    // Simulates recursive CTE syntax (without RECURSIVE keyword for simplicity)
+    const input =
+      'with "tree" as (select "id", "parent_id" from "nodes" union all select "id", "parent_id" from "tree" inner join "nodes" on "parent_id" = "parent_id") select * from "tree" left join "labels" on "id" = "id"';
+    const expected =
+      'with "tree" as (select "id", "parent_id" from "nodes" union all select "id", "parent_id" from "tree" inner join "nodes" on "parent_id" = "parent_id") select * from "tree" left join "labels" on "tree"."id" = "labels"."id"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles multiple CTEs all used in main query joins', () => {
+    const input =
+      'with "a" as (select "id" from "t1"), "b" as (select "id" from "t2"), "c" as (select "id" from "t3") select * from "a" left join "b" on "id" = "id" left join "c" on "id" = "id"';
+    const expected =
+      'with "a" as (select "id" from "t1"), "b" as (select "id" from "t2"), "c" as (select "id" from "t3") select * from "a" left join "b" on "a"."id" = "b"."id" left join "c" on "b"."id" = "c"."id"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles CTE with aggregation and GROUP BY joining main table', () => {
+    const input =
+      'with "agg" as (select "category", count(*) as "cnt" from "products" group by "category") select * from "categories" inner join "agg" on "category" = "category"';
+    const expected =
+      'with "agg" as (select "category", count(*) as "cnt" from "products" group by "category") select * from "categories" inner join "agg" on "categories"."category" = "agg"."category"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles deeply nested subqueries in FROM', () => {
+    const input =
+      'select * from (select * from (select "id" from "deep")) as "a" left join "b" on "id" = "id"';
+    const expected =
+      'select * from (select * from (select "id" from "deep")) as "a" left join "b" on "a"."id" = "b"."id"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles join with OR condition containing same-name columns', () => {
+    const input =
+      'select * from "a" left join "b" on "id" = "id" or "key" = "key"';
+    const expected =
+      'select * from "a" left join "b" on "a"."id" = "b"."id" or "a"."key" = "b"."key"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles CTE used in both FROM and JOIN of main query', () => {
+    const input =
+      'with "shared" as (select "id", "type" from "base") select * from "shared" as "s1" inner join "shared" as "s2" on "id" = "id"';
+    const expected =
+      'with "shared" as (select "id", "type" from "base") select * from "shared" as "s1" inner join "shared" as "s2" on "s1"."id" = "s2"."id"';
+    expect(qualifyJoinColumns(input)).toBe(expected);
+  });
+
+  test('handles complex real-world analytics query pattern', () => {
+    // Pattern similar to the user's original issue
+    const input =
+      'with "sales" as (select "region", sum("amount") as "total" from "orders" group by "region"), "targets" as (select "region", "target" from "goals"), "comparison" as (select "region", "total", "target" from "sales" inner join "targets" on "region" = "region") select * from "regions" left join "comparison" on "region" = "region"';
+    const expected =
+      'with "sales" as (select "region", sum("amount") as "total" from "orders" group by "region"), "targets" as (select "region", "target" from "goals"), "comparison" as (select "region", "total", "target" from "sales" inner join "targets" on "region" = "region") select * from "regions" left join "comparison" on "regions"."region" = "comparison"."region"';
     expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
@@ -409,9 +516,7 @@ describe('qualifyJoinColumns', () => {
     expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
-  test.skip('handles subquery in FROM clause', () => {
-    // KNOWN LIMITATION: Subqueries in FROM clause are not parsed
-    // The rewriter expects a simple table reference, not a subquery
+  test('handles subquery in FROM clause', () => {
     const input =
       'select * from (select * from "x") as "a" left join "b" on "id" = "id"';
     const expected =
@@ -435,11 +540,22 @@ left join "b" on "a"."id" = "b"."id"`;
     expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
-  test('does not modify equality in WHERE clause', () => {
-    // We should only modify ON clauses, not WHERE
+  test('qualifies only ambiguous columns in WHERE clause', () => {
+    // Only columns that appear in ON clauses with same name on both sides are considered ambiguous
+    // and get qualified in WHERE. "status" is not ambiguous here since ON clause uses "id".
     const input =
       'select * from "a" left join "b" on "a"."id" = "b"."id" where "status" = "status"';
+    // status is not qualified because it wasn't in the ON clause as ambiguous
     expect(qualifyJoinColumns(input)).toBe(input);
+  });
+
+  test('qualifies ambiguous columns in WHERE clause when same column in ON', () => {
+    // When "id" is used ambiguously in ON clause, it should also be qualified in WHERE
+    const input =
+      'select * from "a" left join "b" on "id" = "id" where "id" = $1';
+    const expected =
+      'select * from "a" left join "b" on "a"."id" = "b"."id" where "a"."id" = $1';
+    expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
   test('handles case sensitivity in keywords', () => {
@@ -455,12 +571,11 @@ left join "b" on "a"."id" = "b"."id"`;
   });
 
   test('handles table alias with AS keyword', () => {
-    // Note: FROM table uses table name not alias, but JOIN table uses alias correctly
-    // This is acceptable as it still resolves the ambiguity
+    // Both FROM and JOIN tables correctly use their aliases
     const input =
       'select * from "users" as "u" left join "orders" as "o" on "id" = "id"';
     const expected =
-      'select * from "users" as "u" left join "orders" as "o" on "users"."id" = "o"."id"';
+      'select * from "users" as "u" left join "orders" as "o" on "u"."id" = "o"."id"';
     expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
@@ -517,9 +632,7 @@ left join "b" on "a"."id" = "b"."id"`;
     expect(qualifyJoinColumns(input)).toBe(expected);
   });
 
-  test.skip('handles escaped quotes in identifiers', () => {
-    // KNOWN LIMITATION: Escaped quotes in identifiers are not handled correctly
-    // The scrubForRewrite function masks content but doesn't preserve escaped quotes
+  test('handles escaped quotes in identifiers', () => {
     const input =
       'select * from "a" left join "b" on "col""name" = "col""name"';
     const expected =

@@ -237,7 +237,12 @@ export const duckDbMap = <TData extends Record<string, any>>(
     dataType() {
       return `MAP (STRING, ${valueType})`;
     },
-    toDriver(value: TData): MapValueWrapper {
+    toDriver(value: TData) {
+      // Use SQL literals for empty maps due to DuckDB type inference issues
+      // with mapValue() when there are no entries to infer types from
+      if (Object.keys(value).length === 0) {
+        return buildMapLiteral(value, valueType);
+      }
       return wrapMap(value, valueType);
     },
     fromDriver(value: TData | MapValueWrapper): TData {

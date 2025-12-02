@@ -233,6 +233,7 @@ type JoinClause = {
 /**
  * Extracts the identifier name from a quoted identifier like "foo" -> foo
  * Uses the original query string, not the scrubbed one.
+ * Handles escaped quotes: "col""name" -> col""name
  */
 function extractQuotedIdentifier(
   original: string,
@@ -243,11 +244,15 @@ function extractQuotedIdentifier(
   }
 
   let pos = start + 1;
-  while (pos < original.length && original[pos] !== '"') {
-    // Handle escaped quotes
-    if (original[pos] === '"' && original[pos + 1] === '"') {
-      pos += 2;
-      continue;
+  while (pos < original.length) {
+    if (original[pos] === '"') {
+      // Check for escaped quote ""
+      if (original[pos + 1] === '"') {
+        pos += 2;
+        continue;
+      }
+      // End of identifier
+      break;
     }
     pos++;
   }
@@ -340,7 +345,8 @@ function parseTableSources(original: string, scrubbed: string): TableSource[] {
 
 /**
  * Parses a table reference (potentially with alias) starting at the given position.
- * Handles: "table", "table" "alias", "table" as "alias", "schema"."table"
+ * Handles: "table", "table" "alias", "table" as "alias", "schema"."table",
+ * and subqueries: (SELECT ...) AS "alias"
  */
 function parseTableRef(
   original: string,
@@ -351,6 +357,48 @@ function parseTableRef(
   while (pos < scrubbed.length && isWhitespace(scrubbed[pos])) {
     pos++;
   }
+
+  // Handle subquery: (SELECT ...) AS "alias"
+  if (scrubbed[pos] === '(') {
+    const nameStart = pos;
+    // Find matching closing parenthesis
+    let depth = 1;
+    pos++;
+    while (pos < scrubbed.length && depth > 0) {
+      if (scrubbed[pos] === '(') depth++;
+      else if (scrubbed[pos] === ')') depth--;
+      pos++;
+    }
+
+    // Skip whitespace after subquery
+    while (pos < scrubbed.length && isWhitespace(scrubbed[pos])) {
+      pos++;
+    }
+
+    // Look for AS keyword
+    const afterSubquery = scrubbed.slice(pos).toLowerCase();
+    if (afterSubquery.startsWith('as ')) {
+      pos += 3;
+      while (pos < scrubbed.length && isWhitespace(scrubbed[pos])) {
+        pos++;
+      }
+    }
+
+    // Extract alias
+    if (original[pos] === '"') {
+      const aliasIdent = extractQuotedIdentifier(original, pos);
+      if (aliasIdent) {
+        return {
+          name: aliasIdent.name,
+          alias: aliasIdent.name,
+          position: nameStart,
+        };
+      }
+    }
+
+    return null;
+  }
+
   if (original[pos] !== '"') {
     return null;
   }
@@ -398,20 +446,21 @@ function parseTableRef(
     }
   }
 
+  // Check what comes after (potentially skipping the AS keyword)
+  const afterAlias = scrubbed.slice(aliasPos).toLowerCase();
   if (
     original[aliasPos] === '"' &&
-    !afterTable.startsWith('on ') &&
-    !afterTable.startsWith('left ') &&
-    !afterTable.startsWith('right ') &&
-    !afterTable.startsWith('inner ') &&
-    !afterTable.startsWith('full ') &&
-    !afterTable.startsWith('cross ') &&
-    !afterTable.startsWith('join ') &&
-    !afterTable.startsWith('where ') &&
-    !afterTable.startsWith('group ') &&
-    !afterTable.startsWith('order ') &&
-    !afterTable.startsWith('limit ') &&
-    !afterTable.startsWith('as ')
+    !afterAlias.startsWith('on ') &&
+    !afterAlias.startsWith('left ') &&
+    !afterAlias.startsWith('right ') &&
+    !afterAlias.startsWith('inner ') &&
+    !afterAlias.startsWith('full ') &&
+    !afterAlias.startsWith('cross ') &&
+    !afterAlias.startsWith('join ') &&
+    !afterAlias.startsWith('where ') &&
+    !afterAlias.startsWith('group ') &&
+    !afterAlias.startsWith('order ') &&
+    !afterAlias.startsWith('limit ')
   ) {
     const aliasIdent = extractQuotedIdentifier(original, aliasPos);
     if (aliasIdent) {
@@ -432,7 +481,8 @@ function parseTableRef(
 function findJoinClauses(
   original: string,
   scrubbed: string,
-  sources: TableSource[]
+  sources: TableSource[],
+  fromPos: number
 ): JoinClause[] {
   const clauses: JoinClause[] = [];
   const lowerScrubbed = scrubbed.toLowerCase();
@@ -442,6 +492,9 @@ function findJoinClauses(
   // Handle optional schema prefix: "schema"."table" or just "table"
   const joinPattern =
     /\b(left\s+|right\s+|inner\s+|full\s+|cross\s+)?join\s+"[^"]*"(\s*\.\s*"[^"]*")?(\s+as)?(\s+"[^"]*")?\s+on\s+/gi;
+
+  // Start searching from the main FROM clause, skipping JOINs inside CTE definitions
+  joinPattern.lastIndex = fromPos;
 
   let match;
   let sourceIndex = 1; // Start at 1 since index 0 is the FROM table
@@ -532,12 +585,261 @@ function findJoinClauses(
 }
 
 /**
- * Qualifies unqualified column references in JOIN ON clauses.
+ * Finds the boundaries of the main query's SELECT clause (after CTEs).
+ * Returns the start position (after "select ") and end position (before "from ").
+ */
+function findMainSelectClause(
+  scrubbed: string
+): { start: number; end: number } | null {
+  const lowerScrubbed = scrubbed.toLowerCase();
+
+  // If there's a WITH clause, find where the CTEs end
+  let searchStart = 0;
+  const withMatch = /\bwith\s+/i.exec(lowerScrubbed);
+  if (withMatch) {
+    // Find the main SELECT after the CTEs
+    let depth = 0;
+    let pos = withMatch.index + withMatch[0].length;
+
+    while (pos < scrubbed.length) {
+      const char = scrubbed[pos];
+      if (char === '(') {
+        depth++;
+      } else if (char === ')') {
+        depth--;
+      } else if (depth === 0) {
+        const remaining = lowerScrubbed.slice(pos);
+        if (/^\s*select\s+/i.test(remaining)) {
+          searchStart = pos;
+          break;
+        }
+      }
+      pos++;
+    }
+  }
+
+  // Find SELECT keyword
+  const selectPattern = /\bselect\s+/gi;
+  selectPattern.lastIndex = searchStart;
+  const selectMatch = selectPattern.exec(lowerScrubbed);
+  if (!selectMatch) return null;
+
+  const selectStart = selectMatch.index + selectMatch[0].length;
+
+  // Find FROM keyword at same depth
+  let depth = 0;
+  let pos = selectStart;
+  while (pos < scrubbed.length) {
+    const char = scrubbed[pos];
+    if (char === '(') {
+      depth++;
+    } else if (char === ')') {
+      depth--;
+    } else if (depth === 0) {
+      const remaining = lowerScrubbed.slice(pos);
+      if (/^\s*from\s+/i.test(remaining)) {
+        return { start: selectStart, end: pos };
+      }
+    }
+    pos++;
+  }
+
+  return null;
+}
+
+/**
+ * Finds WHERE clause boundaries in the main query.
+ */
+function findWhereClause(
+  scrubbed: string,
+  fromPos: number
+): { start: number; end: number } | null {
+  const lowerScrubbed = scrubbed.toLowerCase();
+
+  // Find WHERE keyword after FROM, at depth 0
+  let depth = 0;
+  let pos = fromPos;
+  let whereStart = -1;
+
+  while (pos < scrubbed.length) {
+    const char = scrubbed[pos];
+    if (char === '(') {
+      depth++;
+    } else if (char === ')') {
+      depth--;
+    } else if (depth === 0) {
+      const remaining = lowerScrubbed.slice(pos);
+      if (whereStart === -1 && /^\s*where\s+/i.test(remaining)) {
+        const match = /^\s*where\s+/i.exec(remaining);
+        if (match) {
+          whereStart = pos + match[0].length;
+        }
+      } else if (
+        whereStart !== -1 &&
+        /^\s*(group\s+by|order\s+by|limit|having|union|intersect|except|$)/i.test(
+          remaining
+        )
+      ) {
+        return { start: whereStart, end: pos };
+      }
+    }
+    pos++;
+  }
+
+  if (whereStart !== -1) {
+    return { start: whereStart, end: scrubbed.length };
+  }
+
+  return null;
+}
+
+/**
+ * Finds ORDER BY clause boundaries in the main query.
+ */
+function findOrderByClause(
+  scrubbed: string,
+  fromPos: number
+): { start: number; end: number } | null {
+  const lowerScrubbed = scrubbed.toLowerCase();
+
+  // Find ORDER BY keyword after FROM, at depth 0
+  let depth = 0;
+  let pos = fromPos;
+  let orderStart = -1;
+
+  while (pos < scrubbed.length) {
+    const char = scrubbed[pos];
+    if (char === '(') {
+      depth++;
+    } else if (char === ')') {
+      depth--;
+    } else if (depth === 0) {
+      const remaining = lowerScrubbed.slice(pos);
+      if (orderStart === -1 && /^\s*order\s+by\s+/i.test(remaining)) {
+        const match = /^\s*order\s+by\s+/i.exec(remaining);
+        if (match) {
+          orderStart = pos + match[0].length;
+        }
+      } else if (
+        orderStart !== -1 &&
+        /^\s*(limit|offset|fetch|for\s+update|$)/i.test(remaining)
+      ) {
+        return { start: orderStart, end: pos };
+      }
+    }
+    pos++;
+  }
+
+  if (orderStart !== -1) {
+    return { start: orderStart, end: scrubbed.length };
+  }
+
+  return null;
+}
+
+/**
+ * Qualifies only specific column references (from the ambiguousColumns set) in a clause.
+ * This handles SELECT, WHERE, and ORDER BY clauses where columns from joined tables
+ * could be ambiguous.
+ */
+function qualifyClauseColumnsSelective(
+  original: string,
+  scrubbed: string,
+  clauseStart: number,
+  clauseEnd: number,
+  defaultSource: string,
+  ambiguousColumns: Set<string>
+): { result: string; offset: number } {
+  const clauseOriginal = original.slice(clauseStart, clauseEnd);
+  const clauseScrubbed = scrubbed.slice(clauseStart, clauseEnd);
+
+  let result = clauseOriginal;
+  let offset = 0;
+
+  // Find all unqualified quoted identifiers
+  let pos = 0;
+  while (pos < clauseScrubbed.length) {
+    // Skip to next quote
+    const quotePos = clauseScrubbed.indexOf('"', pos);
+    if (quotePos === -1) break;
+
+    // Check if this is already qualified (preceded by a dot)
+    if (quotePos > 0 && clauseScrubbed[quotePos - 1] === '.') {
+      // Skip this identifier - it's already qualified
+      const ident = extractQuotedIdentifier(clauseOriginal, quotePos);
+      pos = ident ? ident.end : quotePos + 1;
+      continue;
+    }
+
+    // Extract the identifier
+    const ident = extractQuotedIdentifier(clauseOriginal, quotePos);
+    if (!ident) {
+      pos = quotePos + 1;
+      continue;
+    }
+
+    // Check if this identifier is followed by a dot (it's a table qualifier, not a column)
+    if (
+      ident.end < clauseScrubbed.length &&
+      clauseScrubbed[ident.end] === '.'
+    ) {
+      pos = ident.end + 1;
+      continue;
+    }
+
+    // Only qualify if this column is in the ambiguous set
+    if (!ambiguousColumns.has(ident.name)) {
+      pos = ident.end;
+      continue;
+    }
+
+    // Check if this looks like a column reference (not a function call or alias definition)
+    // Skip if followed by ( which would indicate a function
+    let afterIdent = ident.end;
+    while (
+      afterIdent < clauseScrubbed.length &&
+      isWhitespace(clauseScrubbed[afterIdent])
+    ) {
+      afterIdent++;
+    }
+    if (clauseScrubbed[afterIdent] === '(') {
+      pos = ident.end;
+      continue;
+    }
+
+    // Skip if this is an alias definition (preceded by AS or follows a column expression)
+    // Look for patterns like: "col" as "alias" or just "col", "alias"
+    // We need to be careful here - we only want to qualify column references, not aliases
+    const beforeQuote = clauseScrubbed.slice(0, quotePos).toLowerCase();
+    if (/\bas\s*$/i.test(beforeQuote)) {
+      pos = ident.end;
+      continue;
+    }
+
+    // Qualify this column reference
+    const qualified = `"${defaultSource}"."${ident.name}"`;
+    const oldLength = ident.end - quotePos;
+
+    result =
+      result.slice(0, quotePos + offset) +
+      qualified +
+      result.slice(quotePos + oldLength + offset);
+
+    offset += qualified.length - oldLength;
+    pos = ident.end;
+  }
+
+  return { result, offset };
+}
+
+/**
+ * Qualifies unqualified column references in JOIN ON clauses, SELECT, WHERE,
+ * and ORDER BY clauses.
  *
  * Transforms patterns like:
- *   `left join "b" on "col" = "col"`
+ *   `select "col" from "a" left join "b" on "col" = "col" where "col" in (...)`
  * To:
- *   `left join "b" on "a"."col" = "b"."col"`
+ *   `select "a"."col" from "a" left join "b" on "a"."col" = "b"."col" where "a"."col" in (...)`
  *
  * This fixes the issue where drizzle-orm generates unqualified column
  * references when joining CTEs with eq().
@@ -549,20 +851,30 @@ export function qualifyJoinColumns(query: string): string {
   }
 
   const scrubbed = scrubForRewrite(query);
+  const fromPos = findMainFromClause(scrubbed);
+  if (fromPos < 0) {
+    return query;
+  }
+
   const sources = parseTableSources(query, scrubbed);
   if (sources.length < 2) {
     return query;
   }
 
-  const joinClauses = findJoinClauses(query, scrubbed, sources);
+  const joinClauses = findJoinClauses(query, scrubbed, sources, fromPos);
 
   if (joinClauses.length === 0) {
     return query;
   }
 
-  let result = query;
-  let offset = 0;
+  // Get the first source (FROM table) as the default qualifier
+  const firstSource = sources[0]!;
+  const defaultQualifier = firstSource.alias || firstSource.name;
 
+  let result = query;
+  let totalOffset = 0;
+
+  // First, qualify ON clauses (existing logic)
   for (const join of joinClauses) {
     const scrubbedOnClause = scrubbed.slice(join.onStart, join.onEnd);
     const originalOnClause = query.slice(join.onStart, join.onEnd);
@@ -576,8 +888,19 @@ export function qualifyJoinColumns(query: string): string {
       }
       if (scrubbedOnClause[lhsEnd] !== '"') continue;
 
+      // Find start of identifier, handling escaped quotes ""
       let lhsStartPos = lhsEnd - 1;
-      while (lhsStartPos >= 0 && scrubbedOnClause[lhsStartPos] !== '"') {
+      while (lhsStartPos >= 0) {
+        if (scrubbedOnClause[lhsStartPos] === '"') {
+          // Check if this is an escaped quote ""
+          if (lhsStartPos > 0 && scrubbedOnClause[lhsStartPos - 1] === '"') {
+            // Skip over the escaped quote pair
+            lhsStartPos -= 2;
+            continue;
+          }
+          // Found the opening quote
+          break;
+        }
         lhsStartPos--;
       }
       if (lhsStartPos < 0) continue;
@@ -697,10 +1020,140 @@ export function qualifyJoinColumns(query: string): string {
 
     if (clauseResult !== originalOnClause) {
       result =
-        result.slice(0, join.onStart + offset) +
+        result.slice(0, join.onStart + totalOffset) +
         clauseResult +
-        result.slice(join.onEnd + offset);
-      offset += clauseResult.length - originalOnClause.length;
+        result.slice(join.onEnd + totalOffset);
+      totalOffset += clauseResult.length - originalOnClause.length;
+    }
+  }
+
+  // Collect column names that are known to be ambiguous (appeared in ON clauses with same name on both sides)
+  const ambiguousColumns = new Set<string>();
+  for (const join of joinClauses) {
+    const scrubbedOnClause = scrubbed.slice(join.onStart, join.onEnd);
+    const originalOnClause = query.slice(join.onStart, join.onEnd);
+
+    let eqPos = -1;
+    while ((eqPos = scrubbedOnClause.indexOf('=', eqPos + 1)) !== -1) {
+      let lhsEnd = eqPos - 1;
+      while (lhsEnd >= 0 && isWhitespace(scrubbedOnClause[lhsEnd])) {
+        lhsEnd--;
+      }
+      if (scrubbedOnClause[lhsEnd] !== '"') continue;
+
+      let lhsStartPos = lhsEnd - 1;
+      while (lhsStartPos >= 0) {
+        if (scrubbedOnClause[lhsStartPos] === '"') {
+          if (lhsStartPos > 0 && scrubbedOnClause[lhsStartPos - 1] === '"') {
+            lhsStartPos -= 2;
+            continue;
+          }
+          break;
+        }
+        lhsStartPos--;
+      }
+      if (lhsStartPos < 0) continue;
+
+      let rhsStartPos = eqPos + 1;
+      while (
+        rhsStartPos < scrubbedOnClause.length &&
+        isWhitespace(scrubbedOnClause[rhsStartPos])
+      ) {
+        rhsStartPos++;
+      }
+
+      if (originalOnClause[rhsStartPos] !== '"') continue;
+
+      const lhsIdent = extractQuotedIdentifier(originalOnClause, lhsStartPos);
+      const rhsIdent = extractQuotedIdentifier(originalOnClause, rhsStartPos);
+
+      if (lhsIdent && rhsIdent && lhsIdent.name === rhsIdent.name) {
+        ambiguousColumns.add(lhsIdent.name);
+      }
+    }
+  }
+
+  // If no ambiguous columns were found, we're done
+  if (ambiguousColumns.size === 0) {
+    return result;
+  }
+
+  // Now qualify SELECT, WHERE, and ORDER BY clauses - only for ambiguous columns
+  // We need to re-scrub since the query may have changed
+  const updatedScrubbed = scrubForRewrite(result);
+
+  // Qualify SELECT clause
+  const selectClause = findMainSelectClause(updatedScrubbed);
+  if (selectClause) {
+    const { result: selectResult, offset: selectOffset } =
+      qualifyClauseColumnsSelective(
+        result,
+        updatedScrubbed,
+        selectClause.start,
+        selectClause.end,
+        defaultQualifier,
+        ambiguousColumns
+      );
+    if (selectOffset !== 0) {
+      // Splice the modified clause back into the full query
+      result =
+        result.slice(0, selectClause.start) +
+        selectResult +
+        result.slice(selectClause.end);
+    }
+  }
+
+  // Re-scrub after SELECT changes
+  const scrubbed2 = scrubForRewrite(result);
+  const fromPos2 = findMainFromClause(scrubbed2);
+
+  // Qualify WHERE clause
+  if (fromPos2 >= 0) {
+    const whereClause = findWhereClause(scrubbed2, fromPos2);
+    if (whereClause) {
+      const { result: whereResult, offset: whereOffset } =
+        qualifyClauseColumnsSelective(
+          result,
+          scrubbed2,
+          whereClause.start,
+          whereClause.end,
+          defaultQualifier,
+          ambiguousColumns
+        );
+      if (whereOffset !== 0) {
+        // Splice the modified clause back into the full query
+        result =
+          result.slice(0, whereClause.start) +
+          whereResult +
+          result.slice(whereClause.end);
+      }
+    }
+  }
+
+  // Re-scrub after WHERE changes
+  const scrubbed3 = scrubForRewrite(result);
+  const fromPos3 = findMainFromClause(scrubbed3);
+
+  // Qualify ORDER BY clause
+  if (fromPos3 >= 0) {
+    const orderByClause = findOrderByClause(scrubbed3, fromPos3);
+    if (orderByClause) {
+      const { result: orderResult, offset: orderOffset } =
+        qualifyClauseColumnsSelective(
+          result,
+          scrubbed3,
+          orderByClause.start,
+          orderByClause.end,
+          defaultQualifier,
+          ambiguousColumns
+        );
+      if (orderOffset !== 0) {
+        // Splice the modified clause back into the full query
+        result =
+          result.slice(0, orderByClause.start) +
+          orderResult +
+          result.slice(orderByClause.end);
+      }
     }
   }
 

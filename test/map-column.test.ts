@@ -70,8 +70,7 @@ describe('MAP Column Type Tests', () => {
     expect(result[0]?.intMap).toBeDefined();
   });
 
-  test.skip('handles empty map', async () => {
-    // Skipped: DuckDB driver has issues with empty maps
+  test('handles empty map', async () => {
     const data: Record<string, string> = {};
     await db.insert(mapTable).values({ id: 1, stringMap: data });
 
