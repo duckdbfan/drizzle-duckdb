@@ -29,6 +29,7 @@
 - Vitest only; share utilities via `test/utils.ts`. When exercising migrations, mirror the layout under `test/drizzle2/pg/meta` or `test/duckdb/pg/meta` and keep snapshots in sync.
 - The large `test/duckdb.test.ts` sets up sequences and schemas in `beforeAll`/`beforeEach`; follow that pattern (or create fresh tables in new files) to avoid cross-test bleed.
 - Regression tests should cover DuckDB-specific branches (aliasing, selection mapping, transaction handling, migrator behavior).
+- Perf benchmarks: use `bun x vitest bench --run test/perf --pool=threads --poolOptions.threads.singleThread=true --no-file-parallelism`. Add `--outputJson perf-results/latest.json` if you need an artifact. Vitest 1.6 rejects the older `--runInBand` flag.
 
 ## Commit & Pull Request Guidelines
 
@@ -39,3 +40,4 @@
 
 - Avoid using em-dashes or dashes "-" and semi columns ";".
 - Avoid using too many adjectives or adverbs
+- Avoid using '&' sign in the middle of a sentence.

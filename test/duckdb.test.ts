@@ -2717,6 +2717,53 @@ test('CTE join with direct eq() produces qualified columns in ON clause', async 
   assert.deepEqual(result, [{ id: 1, value: 100, count: 50 }]);
 });
 
+test('CTE join with schema-qualified table (mixed qualification in ON clause)', async () => {
+  const { db } = ctx;
+
+  // This test simulates the customer's pattern where a CTE is joined with a
+  // schema-qualified table. The ON clause has one side qualified and the other
+  // unqualified, which previously caused "ambiguous column reference" errors.
+
+  // Insert test data
+  await db
+    .insert(usersTable)
+    .values([{ name: 'USA' }, { name: 'USA' }, { name: 'Canada' }]);
+
+  // Create a CTE that groups data
+  const countCTE = db.$with('countCTE').as(
+    db
+      .select({
+        name: usersTable.name,
+        userCount: sql<number>`count(*)`.as('userCount'),
+      })
+      .from(usersTable)
+      .groupBy(usersTable.name)
+  );
+
+  // Query that joins the schema-qualified table with the CTE using eq()
+  // This pattern triggers the mixed qualification case:
+  // - Left side (usersTable.name) is qualified with schema.table
+  // - Right side (countCTE.name) was unqualified, now gets qualified
+  const result = await db
+    .with(countCTE)
+    .select({
+      userName: usersTable.name,
+      userCount: countCTE.userCount,
+    })
+    .from(usersTable)
+    .leftJoin(countCTE, eq(usersTable.name, countCTE.name));
+
+  // Should execute without "ambiguous column reference" error
+  expect(result).toHaveLength(3);
+  expect(result.filter((r) => r.userName === 'USA').length).toBe(2);
+  expect(Number(result.filter((r) => r.userName === 'USA')[0]?.userCount)).toBe(
+    2
+  );
+  expect(Number(result.find((r) => r.userName === 'Canada')?.userCount)).toBe(
+    1
+  );
+});
+
 test('prefixed table', async () => {
   const { db } = ctx;
 

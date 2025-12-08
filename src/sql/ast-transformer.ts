@@ -4,6 +4,11 @@
  * Transforms:
  * - Array operators: @>, <@, && -> array_has_all(), array_has_any()
  * - JOIN column qualification: "col" = "col" -> "left"."col" = "right"."col"
+ *
+ * Performance optimizations:
+ * - LRU cache for transformed queries (avoids re-parsing identical queries)
+ * - Smart heuristics to skip JOIN qualification when not needed
+ * - Early exit when no transformation is required
  */
 
 import nodeSqlParser from 'node-sql-parser';
@@ -20,38 +25,107 @@ export type TransformResult = {
   transformed: boolean;
 };
 
+// LRU cache for transformed SQL queries
+// Key: original SQL, Value: transformed result
+const CACHE_SIZE = 500;
+const transformCache = new Map<string, TransformResult>();
+
+function getCachedOrTransform(
+  query: string,
+  transform: () => TransformResult
+): TransformResult {
+  const cached = transformCache.get(query);
+  if (cached) {
+    // Move to end for LRU behavior
+    transformCache.delete(query);
+    transformCache.set(query, cached);
+    return cached;
+  }
+
+  const result = transform();
+
+  // Add to cache with LRU eviction
+  if (transformCache.size >= CACHE_SIZE) {
+    // Delete oldest entry (first key in Map iteration order)
+    const oldestKey = transformCache.keys().next().value;
+    if (oldestKey) {
+      transformCache.delete(oldestKey);
+    }
+  }
+  transformCache.set(query, result);
+
+  return result;
+}
+
+const DEBUG_ENV = 'DRIZZLE_DUCKDB_DEBUG_AST';
+
+function hasJoin(query: string): boolean {
+  return /\bjoin\b/i.test(query);
+}
+
+function debugLog(message: string, payload?: unknown): void {
+  if (process?.env?.[DEBUG_ENV]) {
+    // eslint-disable-next-line no-console
+    console.debug('[duckdb-ast]', message, payload ?? '');
+  }
+}
+
 export function transformSQL(query: string): TransformResult {
   const needsArrayTransform =
     query.includes('@>') || query.includes('<@') || query.includes('&&');
-  const needsJoinTransform = query.toLowerCase().includes('join');
+  const needsJoinTransform =
+    hasJoin(query) || /\bupdate\b/i.test(query) || /\bdelete\b/i.test(query);
 
   if (!needsArrayTransform && !needsJoinTransform) {
     return { sql: query, transformed: false };
   }
 
-  try {
-    const ast = parser.astify(query, { database: 'PostgreSQL' });
+  // Use cache for repeated queries
+  return getCachedOrTransform(query, () => {
+    try {
+      const ast = parser.astify(query, { database: 'PostgreSQL' });
 
-    let transformed = false;
+      let transformed = false;
 
-    if (needsArrayTransform) {
-      transformed = transformArrayOperators(ast) || transformed;
-    }
+      if (needsArrayTransform) {
+        transformed = transformArrayOperators(ast) || transformed;
+      }
 
-    if (needsJoinTransform) {
-      transformed = qualifyJoinColumns(ast) || transformed;
-    }
+      if (needsJoinTransform) {
+        transformed = qualifyJoinColumns(ast) || transformed;
+      }
 
-    if (!transformed) {
+      if (!transformed) {
+        debugLog('AST parsed but no transformation applied', {
+          join: needsJoinTransform,
+        });
+        return { sql: query, transformed: false };
+      }
+
+      const transformedSql = parser.sqlify(ast, { database: 'PostgreSQL' });
+
+      return { sql: transformedSql, transformed: true };
+    } catch (err) {
+      debugLog('AST transform failed; returning original SQL', {
+        error: (err as Error).message,
+      });
       return { sql: query, transformed: false };
     }
+  });
+}
 
-    const transformedSql = parser.sqlify(ast, { database: 'PostgreSQL' });
+/**
+ * Clear the transformation cache. Useful for testing or memory management.
+ */
+export function clearTransformCache(): void {
+  transformCache.clear();
+}
 
-    return { sql: transformedSql, transformed: true };
-  } catch {
-    return { sql: query, transformed: false };
-  }
+/**
+ * Get current cache statistics for monitoring.
+ */
+export function getTransformCacheStats(): { size: number; maxSize: number } {
+  return { size: transformCache.size, maxSize: CACHE_SIZE };
 }
 
 export function needsTransformation(query: string): boolean {
@@ -60,7 +134,9 @@ export function needsTransformation(query: string): boolean {
     query.includes('@>') ||
     query.includes('<@') ||
     query.includes('&&') ||
-    lower.includes('join')
+    lower.includes('join') ||
+    lower.includes('update') ||
+    lower.includes('delete')
   );
 }
 

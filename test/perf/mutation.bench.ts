@@ -19,6 +19,7 @@ const batch = Array.from({ length: 100 }, (_, i) => ({
 }));
 
 let preparedSelect: ReturnType<ReturnType<DuckDBDatabase['select']>['prepare']>;
+let mixedId = 1000;
 
 beforeAll(async () => {
   const harness = await createPerfHarness();
@@ -107,9 +108,7 @@ describe('mutations', () => {
     'mixed workload (select + insert)',
     async () => {
       await db.select().from(factLarge).orderBy(asc(factLarge.id)).limit(20);
-      await db
-        .insert(benchInsert)
-        .values([{ id: Math.floor(Math.random() * 1000), val: 'mix' }]);
+      await db.insert(benchInsert).values([{ id: mixedId++, val: 'mix' }]);
     },
     { time: 700 }
   );

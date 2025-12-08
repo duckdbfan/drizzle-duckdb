@@ -6,10 +6,12 @@
  * 2. JOIN column qualification for ambiguous columns
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import {
   transformSQL,
   needsTransformation,
+  clearTransformCache,
+  getTransformCacheStats,
 } from '../src/sql/ast-transformer.ts';
 
 describe('transformSQL', () => {
@@ -53,6 +55,135 @@ describe('transformSQL', () => {
       // The AST transformer should qualify the columns
       expect(result.sql).toContain('"a"');
       expect(result.sql).toContain('"b"');
+    });
+
+    it('qualifies unqualified right side when left is qualified', () => {
+      const result = transformSQL(
+        'SELECT * FROM "schema1"."table1" LEFT JOIN "cte" ON "schema1"."table1"."id" = "id"'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"cte"."id"');
+    });
+
+    it('qualifies unqualified left side when right is qualified', () => {
+      const result = transformSQL(
+        'SELECT * FROM "cte" LEFT JOIN "schema1"."table1" ON "id" = "schema1"."table1"."id"'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"cte"."id"');
+    });
+
+    it('handles mixed qualification in AND conditions', () => {
+      // Both conditions have matching column names, so both get qualified
+      const result = transformSQL(
+        'SELECT * FROM "schema1"."brands" LEFT JOIN "platformCounts" ON ("schema1"."brands"."country" = "country" AND "schema1"."brands"."brand_slug" = "brand_slug")'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"platformCounts"."country"');
+      expect(result.sql).toContain('"platformCounts"."brand_slug"');
+    });
+
+    it('handles CTE with schema-qualified table join', () => {
+      const sql = `
+        WITH "platformCounts" AS (
+          SELECT "country", "brand_slug", count(*) as cnt FROM platforms GROUP BY "country", "brand_slug"
+        )
+        SELECT * FROM "restaurant_metadata"."brands"
+        LEFT JOIN "platformCounts" ON (
+          "restaurant_metadata"."brands"."country" = "country" AND
+          "restaurant_metadata"."brands"."brand_slug" = "brand_slug"
+        )
+      `;
+      const result = transformSQL(sql);
+      expect(result.transformed).toBe(true);
+      // Both columns get qualified because they have matching names
+      expect(result.sql).toContain('"platformCounts"."country"');
+      expect(result.sql).toContain('"platformCounts"."brand_slug"');
+    });
+
+    it('qualifies columns when ON clause is split across lines', () => {
+      const result = transformSQL(
+        'SELECT * FROM "a"\nJOIN "b"\nON "id" = "id"'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"a"."id"');
+      expect(result.sql).toContain('"b"."id"');
+    });
+
+    it('qualifies columns wrapped in functions', () => {
+      const result = transformSQL(
+        'SELECT * FROM "a" JOIN "b" ON lower("name") = lower("name")'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('lower("a"."name")');
+      expect(result.sql).toContain('lower("b"."name")');
+    });
+
+    it('qualifies columns wrapped in casts', () => {
+      const result = transformSQL(
+        'SELECT * FROM "a" JOIN "b" ON CAST("id" AS INT) = CAST("id" AS INT)'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('CAST("a"."id" AS INT)');
+      expect(result.sql).toContain('CAST("b"."id" AS INT)');
+    });
+
+    it('preserves schema when qualifying same table name', () => {
+      const result = transformSQL(
+        'SELECT * FROM "s1"."t" JOIN "s2"."t" ON "id" = "id"'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"s1"."t"."id"');
+      expect(result.sql).toContain('"s2"."t"."id"');
+    });
+
+    it('qualifies UPDATE ... FROM with same column names', () => {
+      const result = transformSQL(
+        'UPDATE "a" SET "val" = 1 FROM "b" WHERE "id" = "id"'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"a"."id"');
+      expect(result.sql).toContain('"b"."id"');
+    });
+
+    it('qualifies UPDATE ... FROM with multiple joins', () => {
+      const result = transformSQL(
+        'UPDATE "a" SET "val" = 1 FROM "b" JOIN "c" ON "id" = "id" WHERE "id" = "id"'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"a"."id"');
+      expect(result.sql).toContain('"b"."id"');
+      expect(result.sql).toContain('JOIN "c"');
+    });
+
+    it('qualifies INSERT ... SELECT with joins', () => {
+      const result = transformSQL(
+        'INSERT INTO "t1" ("id") SELECT "id" FROM "t2" JOIN "t3" ON "id" = "id"'
+      );
+      expect(result.transformed).toBe(true);
+      expect(result.sql).toContain('"t2"."id"');
+      expect(result.sql).toContain('"t3"."id"');
+    });
+
+    it('does not qualify unqualified columns when names differ', () => {
+      // When column names don't match, DuckDB can resolve them unambiguously
+      const sql = `
+        SELECT * FROM "schema1"."table1"
+        LEFT JOIN "cte" ON "schema1"."table1"."user_id" = "userId"
+      `;
+      const result = transformSQL(sql);
+      // user_id != userId, so no transformation needed
+      expect(result.sql).toContain('"userId"');
+      expect(result.sql).not.toContain('"cte"."userId"');
+    });
+
+    it('does not transform when both sides are already qualified', () => {
+      const result = transformSQL(
+        'SELECT * FROM "a" LEFT JOIN "b" ON "a"."id" = "b"."id"'
+      );
+      // Both sides already qualified, should still parse but not modify
+      expect(result.sql).toContain('"a"."id"');
+      expect(result.sql).toContain('"b"."id"');
     });
 
     it('does not transform queries without JOINs', () => {
@@ -130,5 +261,56 @@ describe('needsTransformation', () => {
     expect(needsTransformation('INSERT INTO users (id) VALUES (1)')).toBe(
       false
     );
+  });
+});
+
+describe('transformation cache', () => {
+  beforeEach(() => {
+    clearTransformCache();
+  });
+
+  it('caches transformed queries', () => {
+    const sql = 'SELECT * FROM "a" LEFT JOIN "b" ON "id" = "id"';
+
+    // First call - should parse and cache
+    const stats1 = getTransformCacheStats();
+    expect(stats1.size).toBe(0);
+
+    const result1 = transformSQL(sql);
+    expect(result1.transformed).toBe(true);
+
+    const stats2 = getTransformCacheStats();
+    expect(stats2.size).toBe(1);
+
+    // Second call - should hit cache
+    const result2 = transformSQL(sql);
+    expect(result2.sql).toBe(result1.sql);
+    expect(result2.transformed).toBe(result1.transformed);
+
+    // Cache size should still be 1 (no duplicate entry)
+    const stats3 = getTransformCacheStats();
+    expect(stats3.size).toBe(1);
+  });
+
+  it('clears cache when requested', () => {
+    const sql = 'SELECT * FROM "a" LEFT JOIN "b" ON "id" = "id"';
+    transformSQL(sql);
+
+    const stats1 = getTransformCacheStats();
+    expect(stats1.size).toBe(1);
+
+    clearTransformCache();
+
+    const stats2 = getTransformCacheStats();
+    expect(stats2.size).toBe(0);
+  });
+
+  it('does not cache queries that do not need transformation', () => {
+    const sql = 'SELECT * FROM users WHERE id = 1';
+    transformSQL(sql);
+
+    // Should not be cached since no transformation was needed
+    const stats = getTransformCacheStats();
+    expect(stats.size).toBe(0);
   });
 });

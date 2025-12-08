@@ -32,4 +32,3 @@ coverage
 *.log
 test/.tmp
 .cursor
-scripts
