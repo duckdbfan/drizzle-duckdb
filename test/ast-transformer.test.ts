@@ -165,16 +165,15 @@ describe('transformSQL', () => {
       expect(result.sql).toContain('"t3"."id"');
     });
 
-    it('does not qualify unqualified columns when names differ', () => {
-      // When column names don't match, DuckDB can resolve them unambiguously
+    it('qualifies unqualified columns when names differ', () => {
+      // Drizzle can emit camelCase aliases on the right side
+      // DuckDB treats these as ambiguous once more joins are present
       const sql = `
         SELECT * FROM "schema1"."table1"
         LEFT JOIN "cte" ON "schema1"."table1"."user_id" = "userId"
       `;
       const result = transformSQL(sql);
-      // user_id != userId, so no transformation needed
-      expect(result.sql).toContain('"userId"');
-      expect(result.sql).not.toContain('"cte"."userId"');
+      expect(result.sql).toContain('"cte"."userId"');
     });
 
     it('does not transform when both sides are already qualified', () => {

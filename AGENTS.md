@@ -1,43 +1,73 @@
+# Codex Agent Guide
+
+## Instruction Order
+
+- Follow system and developer messages first.
+- Then follow workspace or repo guides such as this file.
+- More specific AGENTS.md files override broader ones.
+- If instructions conflict, ask the user.
+
+## Safety
+
+- Avoid destructive commands unless the user asks.
+- Keep changes focused on the task.
+- Do not print secrets or private data.
+
+## Workflow
+
+- Read `README.md`, `CONTRIBUTING.md`, and `git status` before edits.
+- Prefer `rg` for search and `apply_patch` for edits.
+- Use Bun for installs and scripts.
+- For multi step tasks, write a short plan and update it.
+- Run relevant tests or linters when practical and report results.
+
+## Deliverables
+
+- Summarize what changed, where, and why.
+- Reference file paths with line numbers.
+
 # Repository Guidelines
 
-## Project Structure & Modules
+## Project Structure and Modules
 
-- Source lives in `src/` (`driver.ts`, `session.ts`, `dialect.ts`, `columns.ts`, `migrator.ts`, `utils.ts`) with public re-exports from `src/index.ts`.
-- Build artifacts (`dist/*.mjs` + `dist/*.d.ts`) are generated—never hand-edit them. `bun.lockb` and `node_modules/` are managed by Bun.
-- Tests live in `test/`; `test/duckdb.test.ts` mirrors upstream Drizzle Postgres coverage and is long—add narrowly scoped specs in new files (e.g., `test/<feature>.test.ts`) unless you must touch the big suite. Migration snapshots for integration runs sit in `test/drizzle2/pg` and DuckDB-specific migrations in `test/duckdb/pg` (`meta/` holds the journals).
+- Source lives in `src/` (`driver.ts`, `session.ts`, `dialect.ts`, `columns.ts`, `migrator.ts`, `utils.ts`) with public reexports from `src/index.ts`.
+- Build artifacts in `dist/*.mjs` and `dist/*.d.ts` are generated. Do not edit them by hand. `bun.lockb` and `node_modules/` are managed by Bun.
+- Tests live in `test/`. `test/duckdb.test.ts` mirrors upstream Drizzle Postgres coverage and is long. Add new specs in `test/<feature>.test.ts` unless you need to touch the big suite. Migration snapshots for integration runs sit in `test/drizzle2/pg` and DuckDB specific migrations in `test/duckdb/pg`. `meta/` holds the journals.
 
 ## Build, Test, and Development
 
-- Use Bun: `bun install`, `bun run build` (bundles `dist/index.mjs` and then emits declarations), `bun run build:declarations`, `bun test`, `bun run t`.
-- ESM only: `moduleResolution` is `bundler` and imports include `.ts` extensions. Keep relative paths explicit and prefer `import type` to avoid pulling runtime types.
-- Do not introduce JSON/JSONB column types—the dialect explicitly rejects them.
+- Use Bun. Main commands are `bun install`, `bun run build`, `bun run build:declarations`, `bun test`, and `bun run t`.
+- ESM only. `moduleResolution` is `bundler` and imports include `.ts` extensions. Keep relative paths explicit and prefer `import type` when you only need types.
+- Do not add Postgres JSON or JSONB columns. The dialect rejects them. Use `duckDbJson` if you need DuckDB JSON.
 
-## Coding Style & Patterns
+## Coding Style and Patterns
 
-- 2-space indentation, trailing commas on multi-line literals, named exports over defaults. Keep helpers camelCase and classes PascalCase.
-- Collapse re-exports in `index.ts` and stick to modern syntax (`??`, optional chaining, etc.). Avoid `any` unless DuckDB bindings truly lack types.
-- Document DuckDB-vs-Postgres behavior inline (e.g., aliasing or result mapping quirks in `utils.ts` and `DuckDBSelectBuilder`).
+- Use 2 space indentation and trailing commas on multi line literals. Prefer named exports over defaults. Helpers use camelCase and classes use PascalCase.
+- Collapse reexports in `src/index.ts` and stick to modern syntax such as `??` and optional chaining. Avoid `any` unless DuckDB bindings lack types.
+- Document DuckDB compared with Postgres behavior inline, such as aliasing or result mapping quirks in `utils.ts` and `DuckDBSelectBuilder`.
 
 ## DuckDB Runtime Notes
 
-- Preferred client is `@duckdb/node-api@1.4.2-r.1` (used by tests). Stick to `DuckDBInstance.create(':memory:')` (or `DuckDBConnection.create`) for hermetic runs.
-- Clean up connections with `closeSync`/`close`/`disconnectSync` and avoid leaving `.duckdb` files in the repo.
-- Custom column helpers live in `columns.ts` (`duckDbStruct`, `duckDbMap`, `duckDbBlob`); JSON-like structures should use these or Drizzle custom types rather than native JSON columns.
+- Preferred client is `@duckdb/node-api@1.4.2-r.1`. Tests use it. For hermetic runs, use `DuckDBInstance.create(':memory:')` or `DuckDBConnection.create`.
+- Clean up connections with `closeSync`, `close`, or `disconnectSync`. Avoid leaving `.duckdb` files in the repo.
+- Custom column helpers live in `src/columns.ts` (`duckDbStruct`, `duckDbMap`, `duckDbBlob`). For JSON like structures, use these helpers or Drizzle custom types, not Postgres JSON columns.
 
 ## Testing Guidelines
 
-- Vitest only; share utilities via `test/utils.ts`. When exercising migrations, mirror the layout under `test/drizzle2/pg/meta` or `test/duckdb/pg/meta` and keep snapshots in sync.
-- The large `test/duckdb.test.ts` sets up sequences and schemas in `beforeAll`/`beforeEach`; follow that pattern (or create fresh tables in new files) to avoid cross-test bleed.
-- Regression tests should cover DuckDB-specific branches (aliasing, selection mapping, transaction handling, migrator behavior).
-- Perf benchmarks: use `bun x vitest bench --run test/perf --pool=threads --poolOptions.threads.singleThread=true --no-file-parallelism`. Add `--outputJson perf-results/latest.json` if you need an artifact. Vitest 1.6 rejects the older `--runInBand` flag.
+- Use Vitest only. Share utilities via `test/utils.ts`. When exercising migrations, mirror layouts under `test/drizzle2/pg/meta` or `test/duckdb/pg/meta` and keep snapshots in sync.
+- The large `test/duckdb.test.ts` sets up sequences and schemas in `beforeAll` and `beforeEach`. Follow that pattern or create fresh tables in new files to avoid cross test bleed.
+- Regression tests should cover DuckDB specific branches such as aliasing, selection mapping, transaction handling, and migrator behavior.
+- Perf benchmarks use `bun x vitest bench --run test/perf --pool=threads --poolOptions.threads.singleThread=true --no-file-parallelism`. Add `--outputJson perf-results/latest.json` if you need an artifact. Vitest 1.6 rejects the `--runInBand` flag.
 
-## Commit & Pull Request Guidelines
+## Commit and Pull Request Guidelines
 
-- Use short, imperative subjects under 72 chars (e.g., “Add migrator to exports”, “Bump version to 0.0.7…”). Include a body when documenting workarounds or DuckDB quirks, and reference DuckDB tickets inline.
-- PRs should link issues, summarize behavior changes, call out schema/migration updates, and attach `bun test`/`bun run build` output; screenshots only help when showing SQL traces or unexpected planner output.
+- Use short, imperative subjects under 72 chars, for example `Add migrator to exports`.
+- Include a body when documenting workarounds or DuckDB quirks. Reference DuckDB tickets inline.
+- PRs should link issues, summarize behavior changes, call out schema and migration updates, and attach `bun test` and `bun run build` output. Screenshots help when showing SQL traces or planner output.
 
-## Writing style
+## Writing Style
 
-- Avoid using em-dashes or dashes "-" and semi columns ";".
-- Avoid using too many adjectives or adverbs
-- Avoid using '&' sign in the middle of a sentence.
+- Avoid em dashes and sentence dashes.
+- Avoid semicolons.
+- Avoid heavy adjectives and adverbs.
+- Avoid using an ampersand in sentences.

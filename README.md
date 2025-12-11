@@ -40,6 +40,7 @@ pnpm add @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api
 ```typescript
 import { DuckDBInstance } from '@duckdb/node-api';
 import { drizzle } from '@leonardovida-md/drizzle-neo-duckdb';
+import { sql } from 'drizzle-orm';
 import { integer, text, pgTable } from 'drizzle-orm/pg-core';
 
 // Connect to DuckDB
@@ -149,7 +150,7 @@ const db = drizzle(pool);
 ## Schema & Types
 
 - Use `drizzle-orm/pg-core` for schemas; DuckDB SQL is largely Postgres-compatible.
-- DuckDB-specific helpers: `duckDbList`, `duckDbArray`, `duckDbStruct`, `duckDbMap`, `duckDbJson`, `duckDbTimestamp`, `duckDbDate`, `duckDbTime`.
+- DuckDB-specific helpers: `duckDbList`, `duckDbArray`, `duckDbStruct`, `duckDbMap`, `duckDbJson`, `duckDbBlob`, `duckDbInet`, `duckDbInterval`, `duckDbTimestamp`, `duckDbDate`, `duckDbTime`.
 - Browser-safe imports live under `@leonardovida-md/drizzle-neo-duckdb/helpers` (introspection emits this path).
 
 See the [column types](https://leonardovida.github.io/drizzle-neo-duckdb/api/columns) docs for full API.

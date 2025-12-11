@@ -17,6 +17,8 @@ import type { AST } from 'node-sql-parser';
 
 import { transformArrayOperators } from './visitors/array-operators.ts';
 import { qualifyJoinColumns } from './visitors/column-qualifier.ts';
+import { rewriteGenerateSeriesAliases } from './visitors/generate-series-alias.ts';
+import { hoistUnionWith } from './visitors/union-with-hoister.ts';
 
 const parser = new Parser();
 
@@ -75,8 +77,18 @@ export function transformSQL(query: string): TransformResult {
     query.includes('@>') || query.includes('<@') || query.includes('&&');
   const needsJoinTransform =
     hasJoin(query) || /\bupdate\b/i.test(query) || /\bdelete\b/i.test(query);
+  const needsUnionTransform =
+    /\bunion\b/i.test(query) ||
+    /\bintersect\b/i.test(query) ||
+    /\bexcept\b/i.test(query);
+  const needsGenerateSeriesTransform = /\bgenerate_series\b/i.test(query);
 
-  if (!needsArrayTransform && !needsJoinTransform) {
+  if (
+    !needsArrayTransform &&
+    !needsJoinTransform &&
+    !needsUnionTransform &&
+    !needsGenerateSeriesTransform
+  ) {
     return { sql: query, transformed: false };
   }
 
@@ -93,6 +105,14 @@ export function transformSQL(query: string): TransformResult {
 
       if (needsJoinTransform) {
         transformed = qualifyJoinColumns(ast) || transformed;
+      }
+
+      if (needsGenerateSeriesTransform) {
+        transformed = rewriteGenerateSeriesAliases(ast) || transformed;
+      }
+
+      if (needsUnionTransform) {
+        transformed = hoistUnionWith(ast) || transformed;
       }
 
       if (!transformed) {
@@ -135,6 +155,10 @@ export function needsTransformation(query: string): boolean {
     query.includes('<@') ||
     query.includes('&&') ||
     lower.includes('join') ||
+    lower.includes('union') ||
+    lower.includes('intersect') ||
+    lower.includes('except') ||
+    lower.includes('generate_series') ||
     lower.includes('update') ||
     lower.includes('delete')
   );
@@ -142,3 +166,5 @@ export function needsTransformation(query: string): boolean {
 
 export { transformArrayOperators } from './visitors/array-operators.ts';
 export { qualifyJoinColumns } from './visitors/column-qualifier.ts';
+export { rewriteGenerateSeriesAliases } from './visitors/generate-series-alias.ts';
+export { hoistUnionWith } from './visitors/union-with-hoister.ts';

@@ -181,6 +181,27 @@ function walkOnClause(
       }
     }
 
+    if (
+      expr.operator === '=' &&
+      leftCol &&
+      rightCol &&
+      leftColName &&
+      rightColName &&
+      leftColName !== rightColName
+    ) {
+      if (leftQualified && rightUnqualified && !rightColName.includes('.')) {
+        applyQualifier(rightCol, rightQualifier);
+        transformed = true;
+      } else if (
+        leftUnqualified &&
+        rightQualified &&
+        !leftColName.includes('.')
+      ) {
+        applyQualifier(leftCol, leftQualifier);
+        transformed = true;
+      }
+    }
+
     transformed =
       walkOnClause(
         isBinaryExpr(expr.left as Binary)
