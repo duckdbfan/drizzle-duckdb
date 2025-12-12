@@ -64,9 +64,9 @@ describe('union with per arm WITH clauses', () => {
       .select()
       .from(at)
       .union(db.with(bt).select().from(bt))
-      .orderBy((cols) => desc(cols.relevanceRank));
+      .orderBy((cols) => [desc(cols.relevanceRank), cols.id]);
 
     expect(result.map((r) => Number(r.relevanceRank))).toEqual([10, 5, 0, 0]);
-    expect(result.map((r) => r.id)).toEqual([2, 3, 2, 1]);
+    expect(result.map((r) => r.id)).toEqual([2, 3, 1, 2]);
   });
 });

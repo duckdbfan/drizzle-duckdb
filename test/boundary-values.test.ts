@@ -146,7 +146,7 @@ describe('Boundary Value Tests', () => {
       .from(boundaryTable)
       .where(sql`id = 1`);
     expect(result[0]?.timestampVal).toBeInstanceOf(Date);
-    expect((result[0]?.timestampVal as Date).getFullYear()).toBe(2099);
+    expect((result[0]?.timestampVal as Date).getUTCFullYear()).toBe(2099);
   });
 
   test('DOUBLE precision handles very small numbers', async () => {
