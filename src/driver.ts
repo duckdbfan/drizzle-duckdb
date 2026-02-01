@@ -269,8 +269,8 @@ export function drizzle<
 
 export class DuckDBDatabase<
   TFullSchema extends Record<string, unknown> = Record<string, never>,
-  TSchema extends
-    TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>,
+  TSchema extends TablesRelationalConfig =
+    ExtractTablesWithRelations<TFullSchema>,
 > extends PgDatabase<DuckDBQueryResultHKT, TFullSchema, TSchema> {
   static readonly [entityKind]: string = 'DuckDBDatabase';
 

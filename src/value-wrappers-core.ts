@@ -23,35 +23,47 @@ export interface DuckDBValueWrapper<
   readonly data: TData;
 }
 
-export interface ListValueWrapper
-  extends DuckDBValueWrapper<'list', unknown[]> {
+export interface ListValueWrapper extends DuckDBValueWrapper<
+  'list',
+  unknown[]
+> {
   readonly elementType?: string;
 }
 
-export interface ArrayValueWrapper
-  extends DuckDBValueWrapper<'array', unknown[]> {
+export interface ArrayValueWrapper extends DuckDBValueWrapper<
+  'array',
+  unknown[]
+> {
   readonly elementType?: string;
   readonly fixedLength?: number;
 }
 
-export interface StructValueWrapper
-  extends DuckDBValueWrapper<'struct', Record<string, unknown>> {
+export interface StructValueWrapper extends DuckDBValueWrapper<
+  'struct',
+  Record<string, unknown>
+> {
   readonly schema?: Record<string, string>;
 }
 
-export interface MapValueWrapper
-  extends DuckDBValueWrapper<'map', Record<string, unknown>> {
+export interface MapValueWrapper extends DuckDBValueWrapper<
+  'map',
+  Record<string, unknown>
+> {
   readonly valueType?: string;
 }
 
-export interface TimestampValueWrapper
-  extends DuckDBValueWrapper<'timestamp', Date | string | number | bigint> {
+export interface TimestampValueWrapper extends DuckDBValueWrapper<
+  'timestamp',
+  Date | string | number | bigint
+> {
   readonly withTimezone: boolean;
   readonly precision?: number;
 }
 
-export interface BlobValueWrapper
-  extends DuckDBValueWrapper<'blob', Buffer | Uint8Array> {}
+export interface BlobValueWrapper extends DuckDBValueWrapper<
+  'blob',
+  Buffer | Uint8Array
+> {}
 
 export interface JsonValueWrapper extends DuckDBValueWrapper<'json', unknown> {}
 
