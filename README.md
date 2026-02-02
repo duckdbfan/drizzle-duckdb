@@ -37,6 +37,8 @@ npm install @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api
 pnpm add @leonardovida-md/drizzle-neo-duckdb @duckdb/node-api
 ```
 
+Recommended client version is `@duckdb/node-api@1.4.4-r.1`, which bundles DuckDB 1.4.4.
+
 ## Quick Start
 
 ```typescript
